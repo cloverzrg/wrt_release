@@ -37,9 +37,10 @@ clean_up() {
 
 reset_feeds_conf() {
     # 所有源码修正都基于远端分支或指定提交的干净状态。
-    git_retry reset --hard "origin/$REPO_BRANCH"
+    # 旧的单分支浅克隆也能切换到设备配置的新分支。
+    git_retry fetch --depth 1 origin "+refs/heads/$REPO_BRANCH:refs/remotes/origin/$REPO_BRANCH"
+    git_retry checkout -f -B "$REPO_BRANCH" "origin/$REPO_BRANCH"
     git_retry clean -f -d
-    git_retry pull
     if [[ $COMMIT_HASH != "none" ]]; then
         git_retry checkout "$COMMIT_HASH"
     fi

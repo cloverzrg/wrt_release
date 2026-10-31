@@ -68,6 +68,49 @@ GitHub Actions 仅提供京东云百里 AX6000（JDCloud RE-CP-03）的 `jdcloud
 
 每次手动运行只构建该机型。其他设备配置仍可用于本地编译。
 
+### 百里 AX6000 的预装选择
+
+百里配置最后应用 `baili_apps` 片段，覆盖共享预装项：
+
+- 预装 Docker / Dockerman、Passwall、网络唤醒、UPnP 和 iStore 本体。
+- 不预装 Tailscale、OpenVPN 及其管理页面。预置 CA、TUN、OpenSSL、libcap-ng、LZO、LZ4、libnl-genl 和与固件内核匹配的 OpenVPN DCO 模块，供后续安装 OpenVPN OpenSSL 版本及 Tailscale 使用。
+- 取消 AdGuardHome、定时重启、Samba4、Vlmcsd、EasyTier、Lucky、MosDNS、OAF、PBR、独立 SmartDNS 管理页面、独立 ttyd 页面、iStoreX、QuickStart、CoreMark、htop、tcpdump、qrencode 和 SFTP 服务的预装。Dockerman 依赖的 ttyd 核心继续保留，独立网页终端服务默认关闭。
+- 保留 Passwall 默认带入的 SmartDNS 核心，以及基础 dnsmasq-full、DHCP、IPv6 和防火墙功能。
+
+百里使用 ImmortalWrt `openwrt-25.12` 分支（Linux 6.12 系列）和 APK 包管理器，与指定的 daeuniverse `25.12` 应用源对齐。不再注入旧版 `24.10-SNAPSHOT` 的 opkg 软件源。构建期的本地 `custom_feed` 不作为固件的 APK 软件源。iStore 本体和 LuCI 软件管理页面可用于后续安装；应使用与固件版本、架构匹配的软件包。
+
+百里构建同时跳过无关 App 的专用源码源和修补步骤。其他机型的共享预装保持原配置。`make defconfig` 后会检查预装清单及后续安装依赖，防止被依赖重新选中或被上游配置丢弃。
+
+### 百里 AX6000 的 dae / honk 后续安装支持
+
+百里不预装 dae、honk、doona、其 LuCI 页面和专用 UI 库，也不下载对应发行包、拉取专用源码源或注入服务配置。
+
+默认的 `ebpf_proxy_deps` 片段仅预置运行依赖，要求 ARM64 Filogic 和 Linux 6.12 以上：
+
+- IPv6、内核 BTF、cgroup BPF、TC BPF、网络命名空间、探针与跟踪功能。
+- 与本固件内核匹配的调度器、veth、nftables、NFQUEUE 和 conntrack 模块。
+- CA、C++ 运行库、GeoIP / GeoSite 数据，以及可选 LuCI 页面的通用依赖 jshn、flock、coreutils-timeout。
+- `vmlinux-btf-builtin` 空依赖标记包，为官方安装包提供 `vmlinux-btf` 依赖；使用固件自带的内核 BTF，不包含代理、网页或额外内核镜像。
+
+`make defconfig` 后会检查运行依赖、内核版本和禁止预装项；完整编译后还会检查实际内核配置。检查失败会终止构建。
+
+固件预置[官方软件源](https://openwrt.daeuniverse.org/zh-cn/)的公钥和以下带标签的应用源，不添加 `kmods` 源，避免引入其他内核的模块或 BTF 包：
+
+```text
+@daeuniverse https://openwrt.daeuniverse.org/25.12/packages/aarch64_cortex-a53/packages.adb
+```
+
+刷入新固件后，先执行 `apk update`，再按需安装。以下命令不适用于当前的 24.10/opkg 固件：
+
+| 软件 | 命令 |
+| --- | --- |
+| dae 核心 | `apk add dae@daeuniverse` |
+| honk 核心及内置 doona | `apk add honk@daeuniverse` |
+| 可选 dae 管理页面 | `apk add dae@daeuniverse luci-app-dae@daeuniverse` |
+| 可选 honk 管理页面 | `apk add honk@daeuniverse luci-app-honk@daeuniverse` |
+
+安装核心时保留 `@daeuniverse` 标签，以使用该源的版本。dae 和 honk 需要切换运行；IPv4 / IPv6 的 TCP、UDP、DNS 和节点出口能力需要安装后分别验证。
+
 编译完成后，脚本会从 `<BUILD_DIR>/bin/targets/` 收集固件文件到仓库根目录的 `firmware/`。每次完整构建前会清理旧的目标固件文件，`firmware/Packages.manifest` 会被移除。
 
 ## 5. 支持设备
@@ -148,6 +191,7 @@ https://github.com/kenzok8/small-package.git
 - `wrt_core/compilecfg/`：设备构建元信息 `.ini`。
 - `wrt_core/deconfig/`：设备和共享默认配置 `.config`。
 - `wrt_core/deconfig/fragments/`：可组合配置片段。
+- `wrt_core/packages/`：本仓库维护的本地包定义，当前仅包含内核 BTF 的空依赖标记包。
 - `wrt_core/modules/`：模块化脚本，包括仓库准备、网络重试、feeds/custom_feed、源码修正、LuCI 修正、服务修正、验证、Docker、CUPS 等静态职责模块。
 - `wrt_core/patches/`：补丁、默认设置、Wi-Fi 初始化、NSS 诊断、PBR 规则和其他构建时注入文件。
 

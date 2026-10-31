@@ -430,6 +430,15 @@ if [[ -d action_build ]]; then
     BUILD_DIR="action_build"
 fi
 
+export ENABLE_EBPF_PROXY_DEPS=0
+if fragment_in_list "ebpf_proxy_deps" "${EFFECTIVE_CONFIG_FRAGMENTS[@]}"; then
+    export ENABLE_EBPF_PROXY_DEPS=1
+fi
+export ENABLE_BAILI_APPS=0
+if fragment_in_list "baili_apps" "${EFFECTIVE_CONFIG_FRAGMENTS[@]}"; then
+    export ENABLE_BAILI_APPS=1
+fi
+
 "$BASE_PATH/update.sh" "$REPO_URL" "$REPO_BRANCH" "$BUILD_DIR" "$COMMIT_HASH"
 
 apply_config
@@ -438,6 +447,15 @@ remove_uhttpd_dependency
 
 cd "$BASE_PATH/../$BUILD_DIR"
 make defconfig
+
+if [[ $ENABLE_EBPF_PROXY_DEPS == 1 ]]; then
+    source "$BASE_PATH/modules/verify.sh"
+    verify_ebpf_proxy_deps_config "$(pwd)" "$BASE_PATH/deconfig/fragments/ebpf_proxy_deps.config"
+fi
+if [[ $ENABLE_BAILI_APPS == 1 ]]; then
+    source "$BASE_PATH/modules/verify.sh"
+    verify_baili_apps_config "$(pwd)" "$BASE_PATH/deconfig/fragments/baili_apps.config"
+fi
 
 if grep -qE "^CONFIG_TARGET_x86_64=y" "$CONFIG_FILE"; then
     DISTFEEDS_PATH="$BASE_PATH/../$BUILD_DIR/package/emortal/default-settings/files/99-distfeeds.conf"
@@ -457,6 +475,10 @@ fi
 
 make download -j$(($(nproc) * 2))
 make -j$(($(nproc) + 1)) || make -j1 V=s
+
+if [[ $ENABLE_EBPF_PROXY_DEPS == 1 ]]; then
+    verify_ebpf_proxy_kernel "$(pwd)"
+fi
 
 FIRMWARE_DIR="$BASE_PATH/../firmware"
 \rm -rf "$FIRMWARE_DIR"

@@ -1,6 +1,33 @@
 #!/usr/bin/env bash
 # 服务包与运行时默认配置修正。
 
+configure_baili_ttyd() {
+    [[ ${ENABLE_BAILI_APPS:-0} == 1 ]] || return 0
+
+    local config_path="$BUILD_DIR/feeds/packages/utils/ttyd/files/ttyd.config"
+    local tmp_path
+    [[ -f "$config_path" ]] || {
+        echo "错误：未找到 Dockerman 所需的 ttyd 默认配置。" >&2
+        return 1
+    }
+    tmp_path=$(mktemp) || return 1
+    if ! awk '
+        $1 == "config" {
+            in_ttyd=($2 == "ttyd")
+            print
+            if (in_ttyd) { print "\toption enable '\''0'\''"; found=1 }
+            next
+        }
+        in_ttyd && $1 == "option" && $2 == "enable" { next }
+        { print }
+        END { if (!found) exit 1 }
+    ' "$config_path" > "$tmp_path"; then
+        rm -f "$tmp_path"
+        return 1
+    fi
+    mv "$tmp_path" "$config_path"
+}
+
 update_adguardhome() {
     local adguardhome_dir="$(get_custom_feed_package_dir)/luci-app-adguardhome"
     local repo_url="https://github.com/ZqinKing/luci-app-adguardhome.git"

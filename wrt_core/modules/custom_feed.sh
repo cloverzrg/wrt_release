@@ -208,6 +208,21 @@ install_custom_feed() {
     local repo_packages
     local repo_package_array=()
 
+    if [[ ${ENABLE_BAILI_APPS:-0} == 1 ]]; then
+        # Keep Passwall's selectable proxy engines and iStore's dependencies.
+        # The rest of the full preset is not needed by the Baili image.
+        base_custom_feed_packages=(
+            xray-core xray-plugin dns2tcp dns2socks haproxy hysteria
+            naiveproxy shadowsocks-rust sing-box v2ray-core v2ray-geodata geoview v2ray-plugin
+            tuic-client chinadns-ng ipt2socks tcping trojan-plus simple-obfs shadowsocksr-libev
+            v2dat taskd luci-lib-xterm luci-lib-taskd luci-app-store
+        )
+        required_feed_dirs=(
+            xray-core chinadns-ng dns2socks geoview ipt2socks tcping v2ray-geodata
+            taskd luci-lib-xterm luci-lib-taskd luci-app-store luci-app-passwall
+        )
+    fi
+
     if [ ! -d "$fullconenat_nft_dir" ]; then
         base_custom_feed_packages+=(fullconenat-nft)
     fi
@@ -218,10 +233,20 @@ install_custom_feed() {
     # 统一从外部仓库同步指定包，避免分散维护 feeds.conf。
     custom_feed_sources=(
         "kenzok8/small-package|https://github.com/kenzok8/small-package.git||${base_custom_feed_packages[*]}"
-        "sbwml/luci-app-mosdns|https://github.com/sbwml/luci-app-mosdns.git|v5|mosdns luci-app-mosdns geo2txt"
-        "Openwrt-Passwall/openwrt-passwall|https://github.com/Openwrt-Passwall/openwrt-passwall.git|main|luci-app-passwall"
-        "nikkinikki-org/OpenWrt-nikki|https://github.com/nikkinikki-org/OpenWrt-nikki.git|main|nikki luci-app-nikki mihomo-meta"
     )
+    if [[ ${ENABLE_BAILI_APPS:-0} != 1 ]]; then
+        custom_feed_sources+=(
+            "sbwml/luci-app-mosdns|https://github.com/sbwml/luci-app-mosdns.git|v5|mosdns luci-app-mosdns geo2txt"
+        )
+    fi
+    custom_feed_sources+=(
+        "Openwrt-Passwall/openwrt-passwall|https://github.com/Openwrt-Passwall/openwrt-passwall.git|main|luci-app-passwall"
+    )
+    if [[ ${ENABLE_BAILI_APPS:-0} != 1 ]]; then
+        custom_feed_sources+=(
+            "nikkinikki-org/OpenWrt-nikki|https://github.com/nikkinikki-org/OpenWrt-nikki.git|main|nikki luci-app-nikki mihomo-meta"
+        )
+    fi
 
     feeds_path=$(get_feeds_path)
     custom_feed_name=$(get_custom_feed_name)
@@ -244,29 +269,31 @@ install_custom_feed() {
         fi
     done
 
-    if ! sync_repo_root_package_to_feed_dir "https://github.com/adminchenyu/eMMC-Health.git" "main" "$custom_feed_dir" "adminchenyu/eMMC-Health" "luci-app-emmc-health"; then
-        rm -rf "$custom_feed_dir"
-        return 1
-    fi
+    if [[ ${ENABLE_BAILI_APPS:-0} != 1 ]]; then
+        if ! sync_repo_root_package_to_feed_dir "https://github.com/adminchenyu/eMMC-Health.git" "main" "$custom_feed_dir" "adminchenyu/eMMC-Health" "luci-app-emmc-health"; then
+            rm -rf "$custom_feed_dir"
+            return 1
+        fi
 
-    if ! sync_repo_root_package_to_feed_dir "https://github.com/rchen14b/luci-app-airoha-npu.git" "main" "$custom_feed_dir" "rchen14b/luci-app-airoha-npu" "luci-app-airoha-npu"; then
-        rm -rf "$custom_feed_dir"
-        return 1
-    fi
+        if ! sync_repo_root_package_to_feed_dir "https://github.com/rchen14b/luci-app-airoha-npu.git" "main" "$custom_feed_dir" "rchen14b/luci-app-airoha-npu" "luci-app-airoha-npu"; then
+            rm -rf "$custom_feed_dir"
+            return 1
+        fi
 
-    if ! remove_nested_airoha_npu_package "$custom_feed_dir/luci-app-airoha-npu"; then
-        rm -rf "$custom_feed_dir"
-        return 1
-    fi
+        if ! remove_nested_airoha_npu_package "$custom_feed_dir/luci-app-airoha-npu"; then
+            rm -rf "$custom_feed_dir"
+            return 1
+        fi
 
-    if ! fix_airoha_npu_luci_mk "$custom_feed_dir/luci-app-airoha-npu"; then
-        rm -rf "$custom_feed_dir"
-        return 1
-    fi
+        if ! fix_airoha_npu_luci_mk "$custom_feed_dir/luci-app-airoha-npu"; then
+            rm -rf "$custom_feed_dir"
+            return 1
+        fi
 
-    if ! fix_emmc_health_luci_js_deps "$custom_feed_dir/luci-app-emmc-health"; then
-        rm -rf "$custom_feed_dir"
-        return 1
+        if ! fix_emmc_health_luci_js_deps "$custom_feed_dir/luci-app-emmc-health"; then
+            rm -rf "$custom_feed_dir"
+            return 1
+        fi
     fi
 
     register_local_feed_source "$custom_feed_dir" "$feeds_path"

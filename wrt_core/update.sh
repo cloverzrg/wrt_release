@@ -33,6 +33,7 @@ BASE_PATH=${BASE_PATH:-$SCRIPT_DIR}
 source "$SCRIPT_DIR/modules/network.sh"
 source "$SCRIPT_DIR/modules/repo.sh"
 source "$SCRIPT_DIR/modules/feeds.sh"
+source "$SCRIPT_DIR/modules/ebpf_proxy_deps.sh"
 source "$SCRIPT_DIR/modules/custom_feed.sh"
 source "$SCRIPT_DIR/modules/verify.sh"
 source "$SCRIPT_DIR/modules/docker.sh"
@@ -50,6 +51,7 @@ stage_repo_checkout() {
     clone_repo
     clean_up
     reset_feeds_conf
+    prepare_ebpf_proxy_dependencies
 }
 
 stage_upstream_feeds_update() {
@@ -70,7 +72,9 @@ stage_custom_feed_prepare() {
 
 stage_pre_install_source_fixes() {
     # 这里仅修改源码树与 feeds/*，不能依赖 package/feeds/*。
-    update_homeproxy
+    if [[ ${ENABLE_BAILI_APPS:-0} != 1 ]]; then
+        update_homeproxy
+    fi
     fix_default_set
     fix_miniupnpd
     update_golang
@@ -84,34 +88,45 @@ stage_pre_install_source_fixes() {
     # fix_mkpkg_format_invalid
     change_cpuusage
     update_tcping
-    add_ax6600_led
+    if [[ ${ENABLE_BAILI_APPS:-0} != 1 ]]; then
+        add_ax6600_led
+    fi
     set_custom_task
     apply_passwall_tweaks
     update_nss_pbuf_performance
     set_build_signature
     update_nss_diag
     update_menu_location
-    fix_compile_coremark
+    if [[ ${ENABLE_BAILI_APPS:-0} != 1 ]]; then
+        fix_compile_coremark
+    fi
     update_dnsmasq_conf
     add_backup_info_to_sysupgrade
-    update_mosdns_deconfig
-    fix_quickstart
-    update_oaf_deconfig
-    add_timecontrol
-    add_quickfile
-    update_lucky
+    if [[ ${ENABLE_BAILI_APPS:-0} != 1 ]]; then
+        update_mosdns_deconfig
+        fix_quickstart
+        update_oaf_deconfig
+        add_timecontrol
+        add_quickfile
+        update_lucky
+    fi
     # fix_rust_compile_error
-    update_smartdns
-    update_mwan3_fw4
-    update_diskman
+    if [[ ${ENABLE_BAILI_APPS:-0} != 1 ]]; then
+        update_smartdns
+        update_mwan3_fw4
+        update_diskman
+    fi
     update_dockerman
+    configure_baili_ttyd
     set_nginx_default_config
     update_uwsgi_limit_as
     update_argon
     update_nginx_ubus_module
     check_default_settings
-    install_opkg_distfeeds
-    fix_easytier_mk
+    if [[ ${ENABLE_BAILI_APPS:-0} != 1 ]]; then
+        install_opkg_distfeeds
+        fix_easytier_mk
+    fi
     remove_attendedsysupgrade
     fix_kconfig_recursive_dependency
 }
@@ -125,17 +140,23 @@ stage_post_install_package_fixes() {
     # 这里处理已安装到 package/feeds/* 的包和最终一致性检查。
     verify_custom_feed_installed_paths
     docker_stack_sync_nftables_compat "$BUILD_DIR" "0"
-    fix_cups_libcups_avahi_depends
-    fix_easytier_lua
-    update_adguardhome
+    if [[ ${ENABLE_BAILI_APPS:-0} != 1 ]]; then
+        fix_cups_libcups_avahi_depends
+        fix_easytier_lua
+        update_adguardhome
+    fi
     update_script_priority
     update_geoip
     fix_openssl_ktls
-    fix_opkg_check
+    if [[ ${ENABLE_BAILI_APPS:-0} != 1 ]]; then
+        fix_opkg_check
+    fi
     fix_netfilter_kmod_clash
     fix_quectel_cm
-    install_pbr_cmcc
-    fix_pbr_ip_forward
+    if [[ ${ENABLE_BAILI_APPS:-0} != 1 ]]; then
+        install_pbr_cmcc
+        fix_pbr_ip_forward
+    fi
     # apply_hash_fixes
 }
 
