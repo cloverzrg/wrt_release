@@ -59,6 +59,15 @@ REMOVE_CONFIG_FRAGMENTS=proxy ./build.sh x64_immwrt config_preview
 
 GitHub Actions 的手动构建也提供 `add_fragments` 与 `remove_fragments` 输入项，语义与上述环境变量一致。
 
+### GitHub Actions（百里 AX6000）
+
+GitHub Actions 仅提供京东云百里 AX6000（JDCloud RE-CP-03）的 `jdcloud_ax6000_immwrt` 配置，目标平台为 `mediatek/filogic`。
+
+- `Build WRT`：手动构建固件，并上传到本次运行的 Artifacts。
+- `Release WRT`：手动构建固件，并发布固件和内核模块归档到 GitHub Releases。
+
+每次手动运行只构建该机型。其他设备配置仍可用于本地编译。
+
 编译完成后，脚本会从 `<BUILD_DIR>/bin/targets/` 收集固件文件到仓库根目录的 `firmware/`。每次完整构建前会清理旧的目标固件文件，`firmware/Packages.manifest` 会被移除。
 
 ## 5. 支持设备
