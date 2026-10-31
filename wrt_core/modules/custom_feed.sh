@@ -209,17 +209,17 @@ install_custom_feed() {
     local repo_package_array=()
 
     if [[ ${ENABLE_BAILI_APPS:-0} == 1 ]]; then
-        # Keep Passwall's selectable proxy engines and iStore's dependencies.
+        # Keep Passwall's selectable proxy engines.
         # The rest of the full preset is not needed by the Baili image.
         base_custom_feed_packages=(
             xray-core xray-plugin dns2tcp dns2socks haproxy hysteria
             naiveproxy shadowsocks-rust sing-box v2ray-core v2ray-geodata geoview v2ray-plugin
             tuic-client chinadns-ng ipt2socks tcping trojan-plus simple-obfs shadowsocksr-libev
-            v2dat taskd luci-lib-xterm luci-lib-taskd luci-app-store
+            v2dat
         )
         required_feed_dirs=(
             xray-core chinadns-ng dns2socks geoview ipt2socks tcping v2ray-geodata
-            taskd luci-lib-xterm luci-lib-taskd luci-app-store luci-app-passwall
+            luci-app-passwall
         )
     fi
 

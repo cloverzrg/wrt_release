@@ -176,7 +176,7 @@ verify_custom_feed_installed_paths() {
     if [[ ${ENABLE_BAILI_APPS:-0} == 1 ]]; then
         required_package_dirs=(
             xray-core chinadns-ng dns2socks geoview ipt2socks tcping v2ray-geodata
-            taskd luci-lib-xterm luci-lib-taskd luci-app-store luci-app-passwall
+            luci-app-passwall
         )
     fi
 
