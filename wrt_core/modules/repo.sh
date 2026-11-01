@@ -36,10 +36,15 @@ clean_up() {
 
 
 reset_feeds_conf() {
-    # 所有源码修正都基于远端分支或指定提交的干净状态。
-    # 旧的单分支浅克隆也能切换到设备配置的新分支。
-    git_retry fetch --depth 1 origin "+refs/heads/$REPO_BRANCH:refs/remotes/origin/$REPO_BRANCH"
-    git_retry checkout -f -B "$REPO_BRANCH" "origin/$REPO_BRANCH"
+    # 所有源码修正都基于远端分支、标签或指定提交的干净状态。
+    # 旧的单分支浅克隆也能切换到设备配置的新分支或标签。
+    if git ls-remote --exit-code --heads origin "$REPO_BRANCH" >/dev/null 2>&1; then
+        git_retry fetch --depth 1 origin "+refs/heads/$REPO_BRANCH:refs/remotes/origin/$REPO_BRANCH"
+        git_retry checkout -f -B "$REPO_BRANCH" "origin/$REPO_BRANCH"
+    else
+        git_retry fetch --depth 1 origin "+refs/tags/$REPO_BRANCH:refs/tags/$REPO_BRANCH"
+        git_retry checkout -f "refs/tags/$REPO_BRANCH"
+    fi
     git_retry clean -f -d
     if [[ $COMMIT_HASH != "none" ]]; then
         git_retry checkout "$COMMIT_HASH"

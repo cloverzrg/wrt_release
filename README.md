@@ -77,7 +77,7 @@ GitHub Actions 仅提供京东云百里 AX6000（JDCloud RE-CP-03）的 `jdcloud
 - 取消 AdGuardHome、定时重启、Samba4、Vlmcsd、EasyTier、Lucky、MosDNS、OAF、PBR、独立 SmartDNS 管理页面、独立 ttyd 页面、iStoreX、QuickStart、CoreMark、htop、tcpdump、qrencode 和 SFTP 服务的预装。Dockerman 依赖的 ttyd 核心继续保留，独立网页终端服务默认关闭。
 - 保留 Passwall 默认带入的 SmartDNS 核心，以及基础 dnsmasq-full、DHCP、IPv6 和防火墙功能。
 
-百里使用 ImmortalWrt `openwrt-25.12` 分支（Linux 6.12 系列）和 APK 包管理器，与指定的 daeuniverse `25.12` 应用源对齐。不再注入旧版 `24.10-SNAPSHOT` 的 opkg 软件源。不预装 iStore 应用商店，LuCI 软件包管理页面可用于后续安装；如需 iStore 可在系统安装联网后按需执行官方脚本安装。
+百里使用 ImmortalWrt `v25.12.2` 标签（Linux 6.12 系列）和 APK 包管理器，与指定的 daeuniverse `25.12` 应用源对齐。不再注入旧版 `24.10-SNAPSHOT` 的 opkg 软件源。不预装 iStore 应用商店，LuCI 软件包管理页面可用于后续安装；如需 iStore 可在系统安装联网后按需执行官方脚本安装。
 
 百里构建同时跳过无关 App 的专用源码源和修补步骤。其他机型的共享预装保持原配置。`make defconfig` 后会检查预装清单及后续安装依赖，防止被依赖重新选中或被上游配置丢弃。
 
