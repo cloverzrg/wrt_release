@@ -8,6 +8,8 @@
 
 ## 2. 安装编译依赖
 
+直接在宿主机编译时安装以下依赖：
+
 ```bash
 sudo apt -y update
 sudo apt -y full-upgrade
@@ -15,7 +17,7 @@ sudo apt install -y dos2unix libfuse-dev
 sudo bash -c 'bash <(curl -sL https://build-scripts.immortalwrt.org/init_build_environment.sh)'
 ```
 
-容器构建还需要已安装并可正常运行的 Docker。
+容器构建只需要宿主机已安装并可正常运行的 Docker；上述编译依赖由容器镜像安装，不需要安装到宿主机。
 
 ## 3. 获取源码
 
@@ -49,6 +51,15 @@ cd wrt_release
 | `container` | `./build.sh x64_immwrt container` | 使用 Docker 容器执行完整构建，减少本机环境差异。 |
 | `container_debug` | `./build.sh x64_immwrt container_debug` | 在 Docker 容器中执行 debug 流程并进入交互 shell。 |
 | `config_preview` | `./build.sh x64_immwrt config_preview` | 只预览配置片段组合，不拉取源码、不写构建目录。 |
+
+容器镜像默认使用清华大学 Debian 镜像加速 Debian 主软件源，保留基础镜像的安全更新快照和其他第三方源。镜像源更新失败时会尝试原始源。可指定其他 Debian 镜像，或设为空值使用原始源：
+
+```bash
+WRT_DEBIAN_MIRROR=https://mirrors.ustc.edu.cn/debian ./build.sh jdcloud_ax6000_immwrt container
+WRT_DEBIAN_MIRROR= ./build.sh jdcloud_ax6000_immwrt container
+```
+
+这只影响容器镜像内的 Debian 软件源，不改变宿主机软件源，也不加速 Docker 镜像拉取、GitHub 或安全快照下载。
 
 可通过环境变量临时追加或移除配置片段：
 

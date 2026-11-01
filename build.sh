@@ -320,33 +320,33 @@ print_config_preview() {
 
 }
 
-prepare_container_image() {
+prepare_container_image() (
     local base_image=$1
     local image_name=$2
-    local container_tmp_Dockerfile
+    local container_build_context
     local container_default_user
+    local debian_mirror=${WRT_DEBIAN_MIRROR-https://mirrors.tuna.tsinghua.edu.cn/debian}
 
-    container_tmp_Dockerfile=$(mktemp Dockerfile.XXXXXX)
-
-    cleanup_container_dockerfile() {
-        rm -f "$container_tmp_Dockerfile"
-    }
-
-    trap cleanup_container_dockerfile RETURN
+    container_build_context=$(mktemp -d "${TMPDIR:-/tmp}/wrt-container.XXXXXX")
+    trap 'rm -rf "$container_build_context"' EXIT
 
     docker pull "$base_image"
     container_default_user=$(docker run --rm "$base_image" whoami)
-    cat > "$container_tmp_Dockerfile" <<EOF
+    cp "$BASE_PATH/container_apt_setup.sh" "$container_build_context/container_apt_setup.sh"
+    cat > "$container_build_context/Dockerfile" <<EOF
 FROM $base_image
 USER root
-RUN apt-get update && apt-get install -y sudo git jq build-essential cmake g++ clang bison flex libelf-dev libncurses5-dev python3-distutils zlib1g-dev python3 pkg-config libssl-dev
+ARG WRT_DEBIAN_MIRROR
+COPY container_apt_setup.sh /tmp/wrt-container-apt-setup.sh
+RUN sh /tmp/wrt-container-apt-setup.sh && rm -f /tmp/wrt-container-apt-setup.sh
 USER $container_default_user
 RUN git config --global pull.rebase false
 RUN git config --global advice.detachedHead false
 CMD ["bash", "wrt_core/build_container.sh", "$image_name"]
 EOF
-    docker build -t "$image_name" -f "$container_tmp_Dockerfile" .
-}
+    docker build --build-arg "WRT_DEBIAN_MIRROR=$debian_mirror" \
+        -t "$image_name" -f "$container_build_context/Dockerfile" "$container_build_context"
+)
 
 run_container_build() {
     local container_build_mod=$1
