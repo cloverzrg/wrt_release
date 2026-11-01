@@ -326,6 +326,7 @@ prepare_container_image() (
     local container_build_context
     local container_default_user
     local debian_mirror=${WRT_DEBIAN_MIRROR-https://mirrors.tuna.tsinghua.edu.cn/debian}
+    local security_mirror=${WRT_DEBIAN_SECURITY_MIRROR-https://mirrors.nju.edu.cn/debian-archive/debian-security}
 
     container_build_context=$(mktemp -d "${TMPDIR:-/tmp}/wrt-container.XXXXXX")
     trap 'rm -rf "$container_build_context"' EXIT
@@ -337,6 +338,7 @@ prepare_container_image() (
 FROM $base_image
 USER root
 ARG WRT_DEBIAN_MIRROR
+ARG WRT_DEBIAN_SECURITY_MIRROR
 COPY container_apt_setup.sh /tmp/wrt-container-apt-setup.sh
 RUN sh /tmp/wrt-container-apt-setup.sh && rm -f /tmp/wrt-container-apt-setup.sh
 USER $container_default_user
@@ -345,6 +347,7 @@ RUN git config --global advice.detachedHead false
 CMD ["bash", "wrt_core/build_container.sh", "$image_name"]
 EOF
     docker build --build-arg "WRT_DEBIAN_MIRROR=$debian_mirror" \
+        --build-arg "WRT_DEBIAN_SECURITY_MIRROR=$security_mirror" \
         -t "$image_name" -f "$container_build_context/Dockerfile" "$container_build_context"
 )
 

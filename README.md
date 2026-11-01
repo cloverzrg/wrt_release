@@ -52,14 +52,16 @@ cd wrt_release
 | `container_debug` | `./build.sh x64_immwrt container_debug` | 在 Docker 容器中执行 debug 流程并进入交互 shell。 |
 | `config_preview` | `./build.sh x64_immwrt config_preview` | 只预览配置片段组合，不拉取源码、不写构建目录。 |
 
-容器镜像默认使用清华大学 Debian 镜像加速 Debian 主软件源，保留基础镜像的安全更新快照和其他第三方源。镜像源更新失败时会尝试原始源。可指定其他 Debian 镜像，或设为空值使用原始源：
+容器镜像默认使用清华大学 Debian 镜像加速主软件源，将 Debian Bullseye 安全快照切换为南京大学的 Debian 安全归档镜像，保留其他第三方源。安全归档使用 Debian 的签名和包校验，但其索引不一定与原快照完全相同。镜像更新或安装失败时会尝试原始源。
+
+可指定其他 Debian 镜像，或设为空值使用对应的原始源：
 
 ```bash
 WRT_DEBIAN_MIRROR=https://mirrors.ustc.edu.cn/debian ./build.sh jdcloud_ax6000_immwrt container
-WRT_DEBIAN_MIRROR= ./build.sh jdcloud_ax6000_immwrt container
+WRT_DEBIAN_MIRROR= WRT_DEBIAN_SECURITY_MIRROR= ./build.sh jdcloud_ax6000_immwrt container
 ```
 
-这只影响容器镜像内的 Debian 软件源，不改变宿主机软件源，也不加速 Docker 镜像拉取、GitHub 或安全快照下载。
+这只影响容器镜像内的 Debian 软件源，不改变宿主机软件源，也不加速 Docker 镜像拉取或 GitHub 下载。
 
 可通过环境变量临时追加或移除配置片段：
 
