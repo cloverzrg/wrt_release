@@ -173,6 +173,11 @@ _sync_luci_lib_docker() {
         cd .. || return
         \rm -rf luci-lib-docker-tmp
         cd "$BUILD_DIR"
+
+        if [ -f "$lib_path/Makefile" ]; then
+            sed -i 's/^PKG_VERSION:=v/PKG_VERSION:=/' "$lib_path/Makefile"
+        fi
+
         echo "luci-lib-docker 同步完成"
     fi
 }
@@ -204,6 +209,10 @@ update_dockerman() {
         cd .. || return
         \rm -rf dockerman
         cd "$BUILD_DIR"
+
+        if [ -f "$path/Makefile" ]; then
+            sed -i 's/^PKG_VERSION:=v/PKG_VERSION:=/' "$path/Makefile"
+        fi
 
         if declare -F docker_stack_sync_dockerman_nftables_compat >/dev/null 2>&1; then
             docker_stack_sync_dockerman_nftables_compat "$BUILD_DIR" "0" || return 1
