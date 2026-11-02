@@ -85,14 +85,27 @@ GitHub Actions 仅提供京东云百里 AX6000（JDCloud RE-CP-03）的 `jdcloud
 
 百里配置最后应用 `baili_apps` 片段，覆盖共享预装项：
 
-- 预装 Docker / Dockerman、Passwall、网络唤醒和 UPnP。
+- 预装 Docker / Dockerman、Argon 主题、网络唤醒和 UPnP。
+- 关闭 Passwall、中文包、Xray、ChinaDNS-NG、dns2socks、Geoview、ipt2socks、microsocks、tcping 和 SmartDNS 核心的预装开关。相关源码、可选配置片段和处理函数继续保留。
 - 不预装 Tailscale、OpenVPN 及其管理页面。预置 CA、TUN、OpenSSL、libcap-ng、LZO、LZ4、libnl-genl 和与固件内核匹配的 OpenVPN DCO 模块，供后续安装 OpenVPN OpenSSL 版本及 Tailscale 使用。
 - 取消 AdGuardHome、定时重启、Samba4、Vlmcsd、EasyTier、Lucky、MosDNS、OAF、PBR、独立 SmartDNS 管理页面、独立 ttyd 页面、iStoreX、QuickStart、CoreMark、htop、tcpdump、qrencode 和 SFTP 服务的预装。Dockerman 依赖的 ttyd 核心继续保留，独立网页终端服务默认关闭。
-- 保留 Passwall 默认带入的 SmartDNS 核心，以及基础 dnsmasq-full、DHCP、IPv6 和防火墙功能。
+- 保留基础 dnsmasq-full、DHCP、IPv6、防火墙，以及 dae/honk 后续安装所需的 GeoIP / GeoSite、内核模块、BTF 和通用工具。
 
 百里使用 ImmortalWrt `v25.12.2` 标签（Linux 6.12 系列）和 APK 包管理器，与指定的 daeuniverse `25.12` 应用源对齐。不再注入旧版 `24.10-SNAPSHOT` 的 opkg 软件源。不预装 iStore 应用商店，LuCI 软件包管理页面可用于后续安装；如需 iStore 可在系统安装联网后按需执行官方脚本安装。
 
 百里构建同时跳过无关 App 的专用源码源和修补步骤。其他机型的共享预装保持原配置。`make defconfig` 后会检查预装清单及后续安装依赖，防止被依赖重新选中或被上游配置丢弃。
+
+### 百里 AX6000 的主题、Docker 与基础系统版本
+
+百里使用 `v25.12.2` 指定的 LuCI 和 packages feed，不再把 Argon 替换为个人分支的 2.4.3，也不再把 Dockerman 单独替换为旧 Lua 版本 0.5.26：
+
+- Argon 预装版本为 `2.4.7-r20260824`，使用该 feed 配套的 ucode 模板、样式与菜单脚本。弹窗的实际显示效果需要刷机后在浏览器中验证。
+- Dockerman 使用该 feed 的 JS/ucode 实现。配置页面、RPC 后端和 dockerd 均使用 `/etc/config/dockerd`；dockerd 从它生成运行时的 `/tmp/dockerd/daemon.json`，设置 `alt_config_file` 时则使用指定文件。构建会检查这些接口，保留现有 Docker nftables 兼容补丁。
+- Dockerman 的 `26.xxx...~提交号` 是 Git 日期版本，不能按数字跨度与 `0.5.26` 比较。固件按固定 feed 的源码生成版本，不通过改版本号伪装更新。
+- `base-files` 位于 [ImmortalWrt 主仓库的 package/base-files](https://github.com/immortalwrt/immortalwrt/tree/v25.12.2/package/base-files)，包含基础目录、启动、配置生成和固件升级脚本。`1~0c4cd0f9920a` 与 `1950~0c4cd0f9920a` 的上游源码提交相同，前面的差异来自浅克隆截断了包的 Git 提交计数。构建继续使用 `--depth 1`，不补全 Git 历史。本固件还会修改默认网络生成脚本并加入定制内容；在线升级镜像站的 base-files 可能覆盖这些内容，建议保留固件内置版本，随整包固件更新。仅计数差异造成的升级提示可以忽略。
+- APK 的上游构建流程会在 `/etc/apk/world` 写入 `base-files=内置实际版本`，普通 `apk upgrade` 和 LuCI 的升级操作会遵守这个版本约束。LuCI 的更新列表仍会按版本差异显示该包；显示更新不代表版本锁失效。每次构建会按实际内置版本生成约束，无需在脚本中写死某个提交号。
+
+`custom_feed` 是本地 `src-link` 构建源，没有对应的公共镜像目录。百里构建会从 APK 软件源生成器中排除它，包括原先的注释行；本地源码和包选择功能继续保留。完整编译后会检查根文件系统的 `distfeeds.list`，拒绝输出含 `/custom_feed/` 无效 URL 的固件。
 
 ### 百里 AX6000 的 dae / honk 后续安装支持
 
@@ -178,7 +191,7 @@ GitHub Actions 仅提供京东云百里 AX6000（JDCloud RE-CP-03）的 `jdcloud
 
 默认片段由 `compilecfg/*.ini` 的 `CONFIG_FRAGMENTS` 指定：
 
-- 所有设备默认包含 `proxy`。
+- 除百里 AX6000 外，所有设备默认包含 `proxy`。百里通过 `baili_apps` 显式关闭 Passwall 预装。
 - IPQ60xx / IPQ807x 设备默认额外包含 `nss`。
 - 只有已显式选择 Dockerman 或明确适合运行 Docker 的设备默认包含 `docker_deps`，用于预置手动安装 Docker 所需的运行依赖，避免 NAND 空间紧张或无 USB 设备被默认加入 Docker 依赖。
 
@@ -215,3 +228,13 @@ https://github.com/kenzok8/small-package.git
 1. 打开系统设置 → 启动项 → 定位到「appfilter」
 2. 将「appfilter」当前状态从已禁用更改为已启用
 3. 完成配置后，点击启动按钮激活服务
+
+## 10. 构建脚本回归检查
+
+使用 Python 3、Git、Make 和 Bash 4.3 以上版本运行离线检查：
+
+```bash
+python3 -m unittest discover -s tests -v
+```
+
+macOS 的系统 Bash 版本较旧时，可通过 `WRT_TEST_BASH=/path/to/bash` 指定较新版本。检查覆盖百里预装开关和共享依赖、配置预览、本地 APK 源过滤、分支及标签的浅克隆复位和固定 feed 的保留逻辑；不代替完整固件编译或实机验证。

@@ -57,6 +57,9 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v7.0.0
 
+      - name: Check Build Presets
+        run: python3 -m unittest discover -s tests -v
+
       - name: Set Build Date and Timezone
         env:
           RAW_ADD_CONFIG_FRAGMENTS: ${{ inputs.add_fragments }}

@@ -121,6 +121,7 @@ stage_pre_install_source_fixes() {
     set_nginx_default_config
     update_uwsgi_limit_as
     update_argon
+    omit_baili_local_apk_feed
     update_nginx_ubus_module
     check_default_settings
     if [[ ${ENABLE_BAILI_APPS:-0} != 1 ]]; then
@@ -153,6 +154,7 @@ stage_post_install_package_fixes() {
     fi
     fix_netfilter_kmod_clash
     fix_quectel_cm
+    verify_baili_luci_sources "$BUILD_DIR"
     if [[ ${ENABLE_BAILI_APPS:-0} != 1 ]]; then
         install_pbr_cmcc
         fix_pbr_ip_forward

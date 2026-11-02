@@ -33,3 +33,4 @@ wrt_core/deconfig/test.config
 .sisyphus/
 AGENTS.md
 .omo/
+tests/__pycache__/

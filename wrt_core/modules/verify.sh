@@ -191,3 +191,50 @@ verify_custom_feed_installed_paths() {
         return 1
     fi
 }
+
+
+verify_baili_luci_sources() {
+    [[ ${ENABLE_BAILI_APPS:-0} == 1 ]] || return 0
+
+    local build_dir="$1"
+    local luci_dir="$build_dir/feeds/luci"
+    local argon_mk="$luci_dir/themes/luci-theme-argon/Makefile"
+    local dockerman_dir="$luci_dir/applications/luci-app-dockerman"
+    local dockerd_init="$build_dir/feeds/packages/utils/dockerd/files/dockerd.init"
+
+    if ! grep -qxF 'PKG_VERSION:=2.4.7' "$argon_mk" \
+        || ! grep -qxF 'PKG_RELEASE:=20260824' "$argon_mk"; then
+        echo "错误：百里 Argon 必须使用固定 LuCI feed 的 2.4.7-r20260824。" >&2
+        return 1
+    fi
+    if ! grep -Fq "new form.Map('dockerd'," "$dockerman_dir/htdocs/luci-static/resources/view/dockerman/configuration.js" \
+        || ! grep -Fq "ctx.get_first('dockerd', 'globals', 'hosts')" "$dockerman_dir/ucode/docker_socket.uc" \
+        || ! grep -Fq "ctx.get('dockerd', 'globals', 'api_version')" "$dockerman_dir/root/usr/share/rpcd/ucode/docker_rpc.uc" \
+        || ! grep -Fq "config_load 'dockerd'" "$dockerd_init"; then
+        echo "错误：Dockerman 页面、RPC 后端和 dockerd 必须共用 /etc/config/dockerd。" >&2
+        return 1
+    fi
+    echo "百里 Argon、Dockerman 配置接口检查通过。"
+}
+
+
+verify_baili_apk_repositories() {
+    local build_dir="$1"
+    local repositories
+    local found=0
+
+    while IFS= read -r repositories; do
+        found=1
+        if grep -q '/custom_feed/' "$repositories"; then
+            echo "错误：固件 APK 软件源仍包含不可发布的本地 custom_feed：$repositories" >&2
+            return 1
+        fi
+    done < <(find "$build_dir/build_dir" -type f \
+        -path '*/root-mediatek/etc/apk/repositories.d/distfeeds.list' -print)
+
+    if [[ "$found" != 1 ]]; then
+        echo "错误：未找到百里固件根文件系统的 APK 软件源清单。" >&2
+        return 1
+    fi
+    echo "百里固件 APK 软件源检查通过。"
+}

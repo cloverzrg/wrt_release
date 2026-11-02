@@ -44,3 +44,40 @@ install_feeds() {
     network_retry ./scripts/feeds update -i
     ./scripts/feeds install -a -f
 }
+
+
+omit_baili_local_apk_feed() {
+    [[ ${ENABLE_BAILI_APPS:-0} == 1 ]] || return 0
+
+    local feeds_mk="$BUILD_DIR/include/feeds.mk"
+    local tmp_path
+    tmp_path=$(mktemp) || return 1
+
+    # custom_feed is a local src-link build feed. The public ImmortalWrt mirror
+    # cannot serve it, including the commented URL emitted for FEED_*=m.
+    if ! awk '
+        BEGIN {
+            old="$(foreach feed,$(FEEDS_AVAILABLE),"
+            replacement="$(foreach feed,$(filter-out custom_feed,$(FEEDS_AVAILABLE)),"
+        }
+        /^define FeedSourcesAppendAPK$/ { in_apk=1 }
+        in_apk {
+            pos=index($0, old)
+            if (pos) {
+                $0=substr($0, 1, pos-1) replacement substr($0, pos+length(old))
+                found++
+            } else if (index($0, replacement)) {
+                found++
+            }
+        }
+        { print }
+        /^endef$/ { in_apk=0 }
+        END { if (found != 1) exit 1 }
+    ' "$feeds_mk" > "$tmp_path"; then
+        rm -f "$tmp_path"
+        echo "错误：无法从 APK 软件源生成器排除本地 custom_feed。" >&2
+        return 1
+    fi
+    cat "$tmp_path" > "$feeds_mk" || { rm -f "$tmp_path"; return 1; }
+    rm -f "$tmp_path"
+}

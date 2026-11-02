@@ -184,6 +184,13 @@ _sync_luci_lib_docker() {
 
 
 update_dockerman() {
+    # The pinned ImmortalWrt feed ships the JS/ucode frontend and backend together.
+    # Replacing only this app with the old Lua implementation changes its UCI API.
+    if [[ ${ENABLE_BAILI_APPS:-0} == 1 ]]; then
+        echo "百里保留固定 LuCI feed 中的 Dockerman 与配套 RPC 后端。"
+        return 0
+    fi
+
     local path="$BUILD_DIR/feeds/luci/applications/luci-app-dockerman"
     local repo_url="https://github.com/lisaac/luci-app-dockerman.git"
 
@@ -248,6 +255,11 @@ add_quickfile() {
 
 
 update_argon() {
+    if [[ ${ENABLE_BAILI_APPS:-0} == 1 ]]; then
+        echo "百里保留固定 LuCI feed 中的 Argon 2.4.7-r20260824。"
+        return 0
+    fi
+
     local repo_url="https://github.com/ZqinKing/luci-theme-argon.git"
     local dst_theme_path="$BUILD_DIR/feeds/luci/themes/luci-theme-argon"
     local tmp_dir

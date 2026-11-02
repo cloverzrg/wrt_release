@@ -482,6 +482,9 @@ make -j$(($(nproc) + 1)) || make -j1 V=s
 if [[ $ENABLE_EBPF_PROXY_DEPS == 1 ]]; then
     verify_ebpf_proxy_kernel "$(pwd)"
 fi
+if [[ $ENABLE_BAILI_APPS == 1 ]]; then
+    verify_baili_apk_repositories "$(pwd)"
+fi
 
 FIRMWARE_DIR="$BASE_PATH/../firmware"
 \rm -rf "$FIRMWARE_DIR"
