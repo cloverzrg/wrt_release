@@ -28,7 +28,7 @@ update_feeds() {
     sed -i '/[[:space:]]small8[[:space:]]/d' "$FEEDS_PATH"
     sed -i '/[[:space:]]custom_feed[[:space:]]/d' "$FEEDS_PATH"
 
-    if [[ ${ENABLE_BAILI_APPS:-0} != 1 ]]; then
+    if package_selected luci-app-bandix; then
         append_feed_if_missing "$FEEDS_PATH" "openwrt_bandix" "src-git openwrt_bandix https://github.com/timsaya/openwrt-bandix.git;main"
         append_feed_if_missing "$FEEDS_PATH" "luci_app_bandix" "src-git luci_app_bandix https://github.com/timsaya/luci-app-bandix.git;main"
     fi
@@ -46,19 +46,16 @@ install_feeds() {
 }
 
 
-omit_baili_local_apk_feed() {
-    [[ ${ENABLE_BAILI_APPS:-0} == 1 ]] || return 0
-
+omit_unpublished_apk_feeds() {
     local feeds_mk="$BUILD_DIR/include/feeds.mk"
     local tmp_path
     tmp_path=$(mktemp) || return 1
 
-    # custom_feed is a local src-link build feed. The public ImmortalWrt mirror
-    # cannot serve it, including the commented URL emitted for FEED_*=m.
+    # These source feeds have no matching binary index on the ImmortalWrt mirrors.
     if ! awk '
         BEGIN {
             old="$(foreach feed,$(FEEDS_AVAILABLE),"
-            replacement="$(foreach feed,$(filter-out custom_feed,$(FEEDS_AVAILABLE)),"
+            replacement="$(foreach feed,$(filter-out custom_feed nss_packages sqm_scripts_nss openwrt_bandix luci_app_bandix,$(FEEDS_AVAILABLE)),"
         }
         /^define FeedSourcesAppendAPK$/ { in_apk=1 }
         in_apk {
@@ -75,7 +72,7 @@ omit_baili_local_apk_feed() {
         END { if (found != 1) exit 1 }
     ' "$feeds_mk" > "$tmp_path"; then
         rm -f "$tmp_path"
-        echo "错误：无法从 APK 软件源生成器排除本地 custom_feed。" >&2
+        echo "错误：无法从 APK 软件源生成器排除构建专用源。" >&2
         return 1
     fi
     cat "$tmp_path" > "$feeds_mk" || { rm -f "$tmp_path"; return 1; }

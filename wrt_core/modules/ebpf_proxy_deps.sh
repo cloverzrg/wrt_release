@@ -15,6 +15,13 @@ prepare_ebpf_proxy_dependencies() {
     mkdir -p "$package_dir" || return 1
     cp -f "$BASE_PATH/packages/vmlinux-btf-builtin/Makefile" "$package_dir/Makefile" || return 1
     mkdir -p "$base_files_dir/etc/apk/keys" "$base_files_dir/etc/apk/repositories.d" || return 1
-    cp -f "$source_dir/public-key.pem" "$base_files_dir/etc/apk/keys/daeuniverse.pem" || return 1
-    cp -f "$source_dir/daeuniverse.list" "$base_files_dir/etc/apk/repositories.d/daeuniverse.list"
+    cp -f "$source_dir/public-key.pem" "$base_files_dir/etc/apk/keys/daeuniverse.pem"
+}
+
+configure_daeuniverse_apk_source() {
+    local build_dir="$1"
+    local arch
+    arch=$(read_kconfig_value "$build_dir/.config" CONFIG_TARGET_ARCH_PACKAGES)
+    printf '@daeuniverse https://openwrt.daeuniverse.org/25.12/packages/%s/packages.adb\n' "$arch" \
+        > "$build_dir/package/base-files/files/etc/apk/repositories.d/daeuniverse.list"
 }

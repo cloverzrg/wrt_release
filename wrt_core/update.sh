@@ -14,6 +14,7 @@ REPO_URL=$1
 REPO_BRANCH=$2
 BUILD_DIR=$3
 COMMIT_HASH=$4
+CONFIG_INPUT=$5
 
 # 转换为绝对路径，避免后续 cd 后路径失效。
 if [[ "$BUILD_DIR" != /* ]]; then
@@ -35,6 +36,7 @@ source "$SCRIPT_DIR/modules/repo.sh"
 source "$SCRIPT_DIR/modules/feeds.sh"
 source "$SCRIPT_DIR/modules/ebpf_proxy_deps.sh"
 source "$SCRIPT_DIR/modules/custom_feed.sh"
+source "$SCRIPT_DIR/modules/passwall_fixes.sh"
 source "$SCRIPT_DIR/modules/verify.sh"
 source "$SCRIPT_DIR/modules/docker.sh"
 source "$SCRIPT_DIR/modules/cups.sh"
@@ -43,6 +45,14 @@ source "$SCRIPT_DIR/modules/package_source_updates.sh"
 source "$SCRIPT_DIR/modules/target_fixes.sh"
 source "$SCRIPT_DIR/modules/luci_fixes.sh"
 source "$SCRIPT_DIR/modules/service_fixes.sh"
+
+
+package_selected() {
+    case "$(read_kconfig_value "$CONFIG_INPUT" "CONFIG_PACKAGE_$1")" in
+        y|m) return 0 ;;
+        *) return 1 ;;
+    esac
+}
 
 
 # 阶段顺序不可随意调整：feeds install 前后依赖的目录不同。
@@ -72,9 +82,6 @@ stage_custom_feed_prepare() {
 
 stage_pre_install_source_fixes() {
     # 这里仅修改源码树与 feeds/*，不能依赖 package/feeds/*。
-    if [[ ${ENABLE_BAILI_APPS:-0} != 1 ]]; then
-        update_homeproxy
-    fi
     fix_default_set
     fix_miniupnpd
     update_golang
@@ -84,50 +91,34 @@ stage_pre_install_source_fixes() {
     update_default_lan_addr
     remove_something_nss_kmod
     update_affinity_script
-    update_ath11k_fw
-    # fix_mkpkg_format_invalid
     change_cpuusage
-    update_tcping
-    if [[ ${ENABLE_BAILI_APPS:-0} != 1 ]]; then
+    set_custom_task
+    if package_selected luci-app-passwall; then
+        update_tcping
+        apply_passwall_fixes
+    fi
+    if package_selected luci-app-athena-led; then
         add_ax6600_led
     fi
-    set_custom_task
-    apply_passwall_tweaks
+    if package_selected luci-app-quickfile; then
+        add_quickfile
+    fi
     update_nss_pbuf_performance
     set_build_signature
     update_nss_diag
     update_menu_location
-    if [[ ${ENABLE_BAILI_APPS:-0} != 1 ]]; then
-        fix_compile_coremark
-    fi
     update_dnsmasq_conf
     add_backup_info_to_sysupgrade
-    if [[ ${ENABLE_BAILI_APPS:-0} != 1 ]]; then
-        update_mosdns_deconfig
-        fix_quickstart
-        update_oaf_deconfig
-        add_timecontrol
-        add_quickfile
-        update_lucky
+    if package_selected luci-app-dockerman; then
+        configure_ttyd
     fi
-    # fix_rust_compile_error
-    if [[ ${ENABLE_BAILI_APPS:-0} != 1 ]]; then
-        update_smartdns
-        update_mwan3_fw4
-        update_diskman
-    fi
-    update_dockerman
-    configure_baili_ttyd
     set_nginx_default_config
     update_uwsgi_limit_as
-    update_argon
-    omit_baili_local_apk_feed
+    if [[ $(read_kconfig_value "$CONFIG_INPUT" CONFIG_USE_APK) == y ]]; then
+        omit_unpublished_apk_feeds
+    fi
     update_nginx_ubus_module
     check_default_settings
-    if [[ ${ENABLE_BAILI_APPS:-0} != 1 ]]; then
-        install_opkg_distfeeds
-        fix_easytier_mk
-    fi
     remove_attendedsysupgrade
     fix_kconfig_recursive_dependency
 }
@@ -139,27 +130,15 @@ stage_feeds_install() {
 
 stage_post_install_package_fixes() {
     # 这里处理已安装到 package/feeds/* 的包和最终一致性检查。
-    verify_custom_feed_installed_paths
     docker_stack_sync_nftables_compat "$BUILD_DIR" "0"
-    if [[ ${ENABLE_BAILI_APPS:-0} != 1 ]]; then
+    if package_selected luci-app-cupsd || package_selected cups; then
         fix_cups_libcups_avahi_depends
-        fix_easytier_lua
-        update_adguardhome
     fi
     update_script_priority
     update_geoip
     fix_openssl_ktls
-    if [[ ${ENABLE_BAILI_APPS:-0} != 1 ]]; then
-        fix_opkg_check
-    fi
     fix_netfilter_kmod_clash
     fix_quectel_cm
-    verify_baili_luci_sources "$BUILD_DIR"
-    if [[ ${ENABLE_BAILI_APPS:-0} != 1 ]]; then
-        install_pbr_cmcc
-        fix_pbr_ip_forward
-    fi
-    # apply_hash_fixes
 }
 
 main() {

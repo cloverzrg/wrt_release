@@ -6,11 +6,12 @@ on:
     inputs:
       model:
         required: true
-        description: 京东云百里 AX6000 (JDCloud RE-CP-03)
+        description: 固件设备
         type: choice
         default: jdcloud_ax6000_immwrt
         options:
           - jdcloud_ax6000_immwrt
+          - aliyun_ap8220_libwrt
       add_fragments:
         required: false
         description: Add config fragments, comma separated

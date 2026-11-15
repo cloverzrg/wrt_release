@@ -36,6 +36,7 @@ sync_sparse_packages_to_feed_dir() {
     local missing_packages=()
     local clone_args=(clone --depth 1 --filter=blob:none --sparse)
     local pkg
+    local target_pkg
 
     tmp_dir=$(mktemp -d)
 
@@ -60,8 +61,12 @@ sync_sparse_packages_to_feed_dir() {
 
     for pkg in "${packages[@]}"; do
         if [ -d "$tmp_dir/$pkg" ]; then
-            rm -rf "$target_dir/$pkg"
-            mv "$tmp_dir/$pkg" "$target_dir/"
+            target_pkg="$target_dir/$pkg"
+            if ! mkdir -p "$(dirname "$target_pkg")" || ! rm -rf "$target_pkg" || ! mv "$tmp_dir/$pkg" "$target_pkg"; then
+                echo "错误：无法将 $repo_label 的 $pkg 移动到 $target_pkg" >&2
+                rm -rf "$tmp_dir"
+                return 1
+            fi
         else
             missing_packages+=("$pkg")
         fi
@@ -181,24 +186,8 @@ install_custom_feed() {
     local custom_feed_worktree_dir
     local custom_feed_name
 
-    local base_custom_feed_packages=(
-        xray-core xray-plugin dns2tcp dns2socks haproxy hysteria \
-        naiveproxy shadowsocks-rust sing-box v2ray-core v2ray-geodata geoview v2ray-plugin \
-        tuic-client chinadns-ng ipt2socks tcping trojan-plus simple-obfs shadowsocksr-libev \
-        v2dat adguardhome luci-app-adguardhome ddns-go \
-        luci-app-ddns-go taskd luci-lib-xterm luci-lib-taskd luci-app-store quickstart \
-        luci-app-quickstart luci-app-istorex luci-app-cloudflarespeedtest netdata luci-app-netdata \
-        lucky luci-app-lucky luci-app-openclash luci-app-homeproxy luci-app-amlogic \
-        oaf open-app-filter luci-app-oaf easytier luci-app-easytier \
-        msd_lite luci-app-msd_lite cups luci-app-cupsd
-    )
-    local required_feed_dirs=(
-        cups tcping v2ray-geodata luci-lib-taskd luci-app-openclash
-        luci-app-quickstart luci-app-store luci-app-homeproxy luci-app-mosdns geo2txt
-        luci-app-passwall nikki luci-app-nikki mihomo-meta
-        open-app-filter luci-app-oaf lucky luci-app-lucky luci-app-easytier
-        luci-app-emmc-health luci-app-airoha-npu
-    )
+    local base_custom_feed_packages=()
+    local required_feed_dirs=()
     local custom_feed_sources=()
     local missing_feed_dirs=()
     local source_entry
@@ -207,45 +196,42 @@ install_custom_feed() {
     local repo_branch
     local repo_packages
     local repo_package_array=()
+    local package
 
-    if [[ ${ENABLE_BAILI_APPS:-0} == 1 ]]; then
-        # Keep Passwall's selectable proxy engines.
-        # The rest of the full preset is not needed by the Baili image.
-        base_custom_feed_packages=(
+    for package in luci-app-cupsd luci-app-amlogic; do
+        if package_selected "$package"; then
+            base_custom_feed_packages+=("$package")
+        fi
+    done
+    if package_selected cups || package_selected luci-app-cupsd; then
+        base_custom_feed_packages+=(cups)
+    fi
+    if package_selected v2ray-geoip || package_selected v2ray-geosite; then
+        base_custom_feed_packages+=(v2ray-geodata)
+    fi
+    if package_selected luci-app-passwall; then
+        base_custom_feed_packages+=(
             xray-core xray-plugin dns2tcp dns2socks haproxy hysteria
-            naiveproxy shadowsocks-rust sing-box v2ray-core v2ray-geodata geoview v2ray-plugin
+            naiveproxy shadowsocks-rust sing-box v2ray-core geoview v2ray-plugin
             tuic-client chinadns-ng ipt2socks tcping trojan-plus simple-obfs shadowsocksr-libev
             v2dat
         )
-        required_feed_dirs=(
-            xray-core chinadns-ng dns2socks geoview ipt2socks tcping v2ray-geodata
-            luci-app-passwall
+        custom_feed_sources+=(
+            "Openwrt-Passwall/openwrt-passwall|https://github.com/Openwrt-Passwall/openwrt-passwall.git|main|luci-app-passwall"
         )
+        required_feed_dirs+=(luci-app-passwall)
     fi
-
     if [ ! -d "$fullconenat_nft_dir" ]; then
         base_custom_feed_packages+=(fullconenat-nft)
     fi
     if [ ! -d "$fullconenat_dir" ]; then
         base_custom_feed_packages+=(fullconenat)
     fi
-
-    # 统一从外部仓库同步指定包，避免分散维护 feeds.conf。
-    custom_feed_sources=(
-        "kenzok8/small-package|https://github.com/kenzok8/small-package.git||${base_custom_feed_packages[*]}"
-    )
-    if [[ ${ENABLE_BAILI_APPS:-0} != 1 ]]; then
+    if [ "${#base_custom_feed_packages[@]}" -gt 0 ]; then
         custom_feed_sources+=(
-            "sbwml/luci-app-mosdns|https://github.com/sbwml/luci-app-mosdns.git|v5|mosdns luci-app-mosdns geo2txt"
+            "kenzok8/small-package|https://github.com/kenzok8/small-package.git||${base_custom_feed_packages[*]}"
         )
-    fi
-    custom_feed_sources+=(
-        "Openwrt-Passwall/openwrt-passwall|https://github.com/Openwrt-Passwall/openwrt-passwall.git|main|luci-app-passwall"
-    )
-    if [[ ${ENABLE_BAILI_APPS:-0} != 1 ]]; then
-        custom_feed_sources+=(
-            "nikkinikki-org/OpenWrt-nikki|https://github.com/nikkinikki-org/OpenWrt-nikki.git|main|nikki luci-app-nikki mihomo-meta"
-        )
+        required_feed_dirs+=("${base_custom_feed_packages[@]}")
     fi
 
     feeds_path=$(get_feeds_path)
@@ -269,31 +255,21 @@ install_custom_feed() {
         fi
     done
 
-    if [[ ${ENABLE_BAILI_APPS:-0} != 1 ]]; then
-        if ! sync_repo_root_package_to_feed_dir "https://github.com/adminchenyu/eMMC-Health.git" "main" "$custom_feed_dir" "adminchenyu/eMMC-Health" "luci-app-emmc-health"; then
-            rm -rf "$custom_feed_dir"
-            return 1
-        fi
-
-        if ! sync_repo_root_package_to_feed_dir "https://github.com/rchen14b/luci-app-airoha-npu.git" "main" "$custom_feed_dir" "rchen14b/luci-app-airoha-npu" "luci-app-airoha-npu"; then
-            rm -rf "$custom_feed_dir"
-            return 1
-        fi
-
-        if ! remove_nested_airoha_npu_package "$custom_feed_dir/luci-app-airoha-npu"; then
-            rm -rf "$custom_feed_dir"
-            return 1
-        fi
-
-        if ! fix_airoha_npu_luci_mk "$custom_feed_dir/luci-app-airoha-npu"; then
-            rm -rf "$custom_feed_dir"
-            return 1
-        fi
-
-        if ! fix_emmc_health_luci_js_deps "$custom_feed_dir/luci-app-emmc-health"; then
-            rm -rf "$custom_feed_dir"
-            return 1
-        fi
+    if package_selected luci-app-emmc-health; then
+        sync_repo_root_package_to_feed_dir "https://github.com/adminchenyu/eMMC-Health.git" "main" \
+            "$custom_feed_dir" "adminchenyu/eMMC-Health" "luci-app-emmc-health" || return 1
+        fix_emmc_health_luci_js_deps "$custom_feed_dir/luci-app-emmc-health" || return 1
+        required_feed_dirs+=(luci-app-emmc-health)
+    fi
+    if package_selected luci-app-airoha-npu; then
+        sync_repo_root_package_to_feed_dir "https://github.com/rchen14b/luci-app-airoha-npu.git" "main" \
+            "$custom_feed_dir" "rchen14b/luci-app-airoha-npu" "luci-app-airoha-npu" || return 1
+        remove_nested_airoha_npu_package "$custom_feed_dir/luci-app-airoha-npu" || return 1
+        fix_airoha_npu_luci_mk "$custom_feed_dir/luci-app-airoha-npu" || return 1
+        required_feed_dirs+=(luci-app-airoha-npu)
+    fi
+    if [ "${#required_feed_dirs[@]}" -eq 0 ]; then
+        return 0
     fi
 
     register_local_feed_source "$custom_feed_dir" "$feeds_path"

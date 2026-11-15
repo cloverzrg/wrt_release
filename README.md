@@ -22,7 +22,7 @@ sudo bash -c 'bash <(curl -sL https://build-scripts.immortalwrt.org/init_build_e
 ## 3. 获取源码
 
 ```bash
-git clone https://github.com/ZqinKing/wrt_release.git
+git clone -b main-ser8-build https://github.com/cloverzrg/wrt_release.git
 cd wrt_release
 ```
 
@@ -67,75 +67,50 @@ WRT_DEBIAN_MIRROR= WRT_DEBIAN_SECURITY_MIRROR= ./build.sh jdcloud_ax6000_immwrt 
 
 ```bash
 ADD_CONFIG_FRAGMENTS=docker_deps ./build.sh gemtek_w1701k_immwrt config_preview
-REMOVE_CONFIG_FRAGMENTS=proxy ./build.sh x64_immwrt config_preview
+REMOVE_CONFIG_FRAGMENTS=ebpf_proxy_deps ./build.sh x64_immwrt config_preview
 ```
 
 GitHub Actions 的手动构建也提供 `add_fragments` 与 `remove_fragments` 输入项，语义与上述环境变量一致。
 
-### GitHub Actions（百里 AX6000）
+### GitHub Actions
 
-GitHub Actions 仅提供京东云百里 AX6000（JDCloud RE-CP-03）的 `jdcloud_ax6000_immwrt` 配置，目标平台为 `mediatek/filogic`。
+`Build WRT` 和 `Release WRT` 都可选择百里 AX6000（`jdcloud_ax6000_immwrt`）或阿里云 AP8220（`aliyun_ap8220_libwrt`）。构建流程上传 Artifacts。发布流程将固件和同批构建的内核模块归档上传到 GitHub Releases。
 
-- `Build WRT`：手动构建固件，并上传到本次运行的 Artifacts。
-- `Release WRT`：手动构建固件，并发布固件和内核模块归档到 GitHub Releases。
+### APK 和共享应用
 
-每次手动运行只构建该机型。其他设备配置仍可用于本地编译。
+共享配置默认使用 APK。固件预装 Argon、Diskman 及其简体中文包、网络唤醒和 UPnP。固件包含 Diskman 所需的 exFAT、MS-DOS、NTFS3 和 CP932 / CP936 / CP950 内核模块。设备配置可将 Diskman 和语言包设为 `m`，生成独立安装包。
 
-### 百里 AX6000 的预装选择
+固件保留 DNS、IPv6、防火墙、TUN 和 OpenVPN DCO 等依赖。AP8220 的 LiBwrt 配置与百里一样预装 Docker 和 Dockerman。其他设备可通过设备配置选择 Docker 和 `docker_deps`。
 
-百里配置最后应用 `baili_apps` 片段，覆盖共享预装项：
+百里固定使用 ImmortalWrt `v25.12.2`。AP8220 固定使用 LibWrt `v25.12.2`，目标为 `qualcommax/ipq807x`，内核为 Linux 6.12。两者使用同一版 ImmortalWrt LuCI 和 packages 源。软件包管理器保留固件内置的 `base-files` 版本约束。
 
-- 预装 Docker / Dockerman、Diskman 及其简体中文包、Argon 主题、网络唤醒和 UPnP。Diskman 所需的 exFAT、MS-DOS、NTFS3 和 CP932 / CP936 / CP950 内核模块随固件构建并预装。
-- 关闭 Passwall、中文包、Xray、ChinaDNS-NG、dns2socks、Geoview、ipt2socks、microsocks、tcping 和 SmartDNS 核心的预装开关。相关源码、可选配置片段和处理函数继续保留。
-- 不预装 Tailscale、OpenVPN 及其管理页面。预置 CA、TUN、OpenSSL、libcap-ng、LZO、LZ4、libnl-genl 和与固件内核匹配的 OpenVPN DCO 模块，供后续安装 OpenVPN OpenSSL 版本及 Tailscale 使用。
-- 取消 AdGuardHome、定时重启、Samba4、Vlmcsd、EasyTier、Lucky、MosDNS、OAF、PBR、独立 SmartDNS 管理页面、独立 ttyd 页面、iStoreX、QuickStart、CoreMark、htop、tcpdump、qrencode 和 SFTP 服务的预装。Dockerman 依赖的 ttyd 核心继续保留，独立网页终端服务默认关闭。
-- 保留基础 dnsmasq-full、DHCP、IPv6、防火墙，以及 dae/honk 后续安装所需的 GeoIP / GeoSite、内核模块、BTF 和通用工具。
+### 安装 Honk
 
-百里使用 ImmortalWrt `v25.12.2` 标签（Linux 6.12 系列）和 APK 包管理器，与指定的 daeuniverse `25.12` 应用源对齐。不再注入旧版 `24.10-SNAPSHOT` 的 opkg 软件源。不预装 iStore 应用商店，LuCI 软件包管理页面可用于后续安装；如需 iStore 可在系统安装联网后按需执行官方脚本安装。
+支持 Linux 6.12 及以上的设备默认启用 `ebpf_proxy_deps`。固件包含 BTF、TC BPF、cgroup BPF、NFQUEUE、GeoIP 和 GeoSite。构建流程按目标架构配置 daeuniverse 25.12 应用源及公钥。内核模块随固件构建，APK 源只安装应用。
 
-百里构建同时跳过无关 App 的专用源码源和修补步骤。其他机型的共享预装保持原配置。`make defconfig` 后会检查预装清单及后续安装依赖，防止被依赖重新选中或被上游配置丢弃。
+刷入对应型号的 APK 固件后，执行以下命令安装 Honk。Honk 自带 doona 界面。
 
-### 百里 AX6000 的主题、Docker 与基础系统版本
-
-百里使用 `v25.12.2` 指定的 LuCI 和 packages feed，不再把 Argon 替换为个人分支的 2.4.3，也不再把 Dockerman 单独替换为旧 Lua 版本 0.5.26：
-
-- Argon 预装版本为 `2.4.7-r20260824`，使用该 feed 配套的 ucode 模板、样式与菜单脚本。弹窗的实际显示效果需要刷机后在浏览器中验证。
-- Dockerman 使用该 feed 的 JS/ucode 实现。配置页面、RPC 后端和 dockerd 均使用 `/etc/config/dockerd`；dockerd 从它生成运行时的 `/tmp/dockerd/daemon.json`，设置 `alt_config_file` 时则使用指定文件。构建会检查这些接口，保留现有 Docker nftables 兼容补丁。
-- Dockerman 的 `26.xxx...~提交号` 是 Git 日期版本，不能按数字跨度与 `0.5.26` 比较。固件按固定 feed 的源码生成版本，不通过改版本号伪装更新。
-- `base-files` 位于 [ImmortalWrt 主仓库的 package/base-files](https://github.com/immortalwrt/immortalwrt/tree/v25.12.2/package/base-files)，包含基础目录、启动、配置生成和固件升级脚本。`1~0c4cd0f9920a` 与 `1950~0c4cd0f9920a` 的上游源码提交相同，前面的差异来自浅克隆截断了包的 Git 提交计数。构建继续使用 `--depth 1`，不补全 Git 历史。本固件还会修改默认网络生成脚本并加入定制内容；在线升级镜像站的 base-files 可能覆盖这些内容，建议保留固件内置版本，随整包固件更新。仅计数差异造成的升级提示可以忽略。
-- APK 的上游构建流程会在 `/etc/apk/world` 写入 `base-files=内置实际版本`，普通 `apk upgrade` 和 LuCI 的升级操作会遵守这个版本约束。LuCI 的更新列表仍会按版本差异显示该包；显示更新不代表版本锁失效。每次构建会按实际内置版本生成约束，无需在脚本中写死某个提交号。
-
-`custom_feed` 是本地 `src-link` 构建源，没有对应的公共镜像目录。百里构建会从 APK 软件源生成器中排除它，包括原先的注释行；本地源码和包选择功能继续保留。完整编译后会检查根文件系统的 `distfeeds.list`，拒绝输出含 `/custom_feed/` 无效 URL 的固件。
-
-### 百里 AX6000 的 dae / honk 后续安装支持
-
-百里不预装 dae、honk、doona、其 LuCI 页面和专用 UI 库，也不下载对应发行包、拉取专用源码源或注入服务配置。
-
-默认的 `ebpf_proxy_deps` 片段仅预置运行依赖，要求 ARM64 Filogic 和 Linux 6.12 以上：
-
-- IPv6、内核 BTF、cgroup BPF、TC BPF、网络命名空间、探针与跟踪功能。
-- 与本固件内核匹配的调度器、veth、nftables、NFQUEUE 和 conntrack 模块。
-- CA、C++ 运行库、GeoIP / GeoSite 数据，以及可选 LuCI 页面的通用依赖 jshn、flock、coreutils-timeout。
-- `vmlinux-btf-builtin` 空依赖标记包，为官方安装包提供 `vmlinux-btf` 依赖；使用固件自带的内核 BTF，不包含代理、网页或额外内核镜像。
-
-`make defconfig` 后会检查运行依赖、内核版本和禁止预装项；完整编译后还会检查实际内核配置。检查失败会终止构建。
-
-固件预置[官方软件源](https://openwrt.daeuniverse.org/zh-cn/)的公钥和以下带标签的应用源，不添加 `kmods` 源，避免引入其他内核的模块或 BTF 包：
-
-```text
-@daeuniverse https://openwrt.daeuniverse.org/25.12/packages/aarch64_cortex-a53/packages.adb
+```sh
+apk update
+apk add honk@daeuniverse
 ```
 
-刷入新固件后，先执行 `apk update`，再按需安装。以下命令不适用于当前的 24.10/opkg 固件：
+需要 LuCI 管理页面时，安装 `luci-app-honk@daeuniverse`。Honk 的配置与启用步骤见[上游安装指南](https://github.com/daeuniverse/openwrt-packages#openwrt-integration)。
 
-| 软件 | 命令 |
-| --- | --- |
-| dae 核心 | `apk add dae@daeuniverse` |
-| honk 核心及内置 doona | `apk add honk@daeuniverse` |
-| 可选 dae 管理页面 | `apk add dae@daeuniverse luci-app-dae@daeuniverse` |
-| 可选 honk 管理页面 | `apk add honk@daeuniverse luci-app-honk@daeuniverse` |
+### AP8220 的 NSS
 
-安装核心时保留 `@daeuniverse` 标签，以使用该源的版本。dae 和 honk 需要切换运行；IPv4 / IPv6 的 TCP、UDP、DNS 和节点出口能力需要安装后分别验证。
+固件包含 NSS 驱动、Wi-Fi 卸载及 ECM 连接加速。首次启用 Honk 前，在 AP8220 上停用 ECM 和防火墙流量卸载，让 Honk 接管流量。
+
+```sh
+/etc/init.d/qca-nss-ecm disable
+/etc/init.d/qca-nss-ecm stop
+uci set 'firewall.@defaults[0].flow_offloading=0'
+uci set 'firewall.@defaults[0].flow_offloading_hw=0'
+uci commit firewall
+/etc/init.d/firewall reload
+```
+
+停用 Honk 后，可执行 `/etc/init.d/qca-nss-ecm enable` 和 `/etc/init.d/qca-nss-ecm start` 恢复 ECM。
 
 编译完成后，脚本会从 `<BUILD_DIR>/bin/targets/` 收集固件文件到仓库根目录的 `firmware/`。每次完整构建前会清理旧的目标固件文件，`firmware/Packages.manifest` 会被移除。
 
@@ -150,14 +125,14 @@ GitHub Actions 仅提供京东云百里 AX6000（JDCloud RE-CP-03）的 `jdcloud
 | 京东云 | 百里 / AX6000 | `jdcloud_ax6000_immwrt` |
 | 阿里云 | AP8220 | `aliyun_ap8220_immwrt` |
 | 阿里云 | AP8220 - LiBwrt | `aliyun_ap8220_libwrt` |
-| Linksys | MX4200v1、MX4200v2、MX4300 | `linksys_mx4x00_immwrt` |
+| Linksys | MX4200v1、MX4200v2、MX4300 | `linksys_mx4x00_libwrt` |
 | Link | NN6000v2 | `link_nn6000v2_immwrt` |
 | 奇虎 | 360v6 | `qihoo_360v6_immwrt` |
 | 红米 | AX5 | `redmi_ax5_immwrt` |
 | 红米 | AX6 | `redmi_ax6_immwrt` |
 | 红米 | AX6 - LiBwrt | `redmi_ax6_libwrt` |
-| 红米 | AX6000 | `redmi_ax6000_immwrt21` |
 | CMCC（中国移动） | RAX3000M | `cmcc_rax3000m_immwrt` |
+| Cudy | TR3000 v1 / 256 MB v1（ImmortalWrt `v25.12.2`，mt76） | `cudy_tr3000_immwrt` |
 | 斐讯 | N1 | `n1_immwrt` |
 | 兆能 | M2 | `zn_m2_immwrt` |
 | 兆能 | M2 - LiBwrt | `zn_m2_libwrt` |
@@ -183,19 +158,15 @@ GitHub Actions 仅提供京东云百里 AX6000（JDCloud RE-CP-03）的 `jdcloud
 
 不同设备会使用不同上游源码，例如 `VIKINGYFY/immortalwrt`、`immortalwrt/immortalwrt`、`LiBwrt/openwrt-6.x`、`padavanonly/immortalwrt-mt798x` 或本仓库维护的特定分支。`BUILD_TARGET_SDK` 未配置时，容器构建默认使用 `immortalwrt/sdk:openwrt-25.12`。
 
-构建时会按顺序组合配置：
+构建按以下顺序组合配置，后面的设置优先。
 
-1. 设备专用 `.config`
-2. `compile_base.config`
-3. `wrt_core/deconfig/fragments/<name>.config` 中的有效配置片段
+1. 共享的 `wrt_core/deconfig/compile_base.config`
+2. 设备专用 `.config`
+3. 共享的 `ebpf_proxy_deps`、设备 `CONFIG_FRAGMENTS` 和额外配置片段
 
-默认片段由 `compilecfg/*.ini` 的 `CONFIG_FRAGMENTS` 指定：
+高通 IPQ60xx / IPQ807x 通过 `nss` 片段启用硬件加速。S20M 的 24.10 源码使用 opkg 和 Linux 6.6。S20M 在设备配置中覆盖包管理器，并以 `DEFAULT_EBPF_PROXY_DEPS=0` 跳过 Honk 依赖。
 
-- 除百里 AX6000 外，所有设备默认包含 `proxy`。百里通过 `baili_apps` 显式关闭 Passwall 预装。
-- IPQ60xx / IPQ807x 设备默认额外包含 `nss`。
-- 只有已显式选择 Dockerman 或明确适合运行 Docker 的设备默认包含 `docker_deps`，用于预置手动安装 Docker 所需的运行依赖，避免 NAND 空间紧张或无 USB 设备被默认加入 Docker 依赖。
-
-`ADD_CONFIG_FRAGMENTS` 会在默认片段后追加，`REMOVE_CONFIG_FRAGMENTS` 会从最终片段中移除对应配置片段。移除只表示“不追加这个 fragment”，不会反向修改设备 `.config` 或 `compile_base.config` 中已经写明的配置。
+`ADD_CONFIG_FRAGMENTS` 追加片段，`REMOVE_CONFIG_FRAGMENTS` 移除片段。可用 `ADD_CONFIG_FRAGMENTS=proxy` 选择 Passwall。
 
 ## 7. 三方插件
 
@@ -205,7 +176,7 @@ GitHub Actions 仅提供京东云百里 AX6000（JDCloud RE-CP-03）的 `jdcloud
 https://github.com/kenzok8/small-package.git
 ```
 
-相关增删和同步逻辑位于 `wrt_core/update.sh` 编排的 `wrt_core/modules/` 静态阶段。配置片段只选择 Kconfig，不负责 clone 仓库、修改 feeds 或安装 feeds。
+相关增删和同步逻辑位于 `wrt_core/update.sh` 编排的 `wrt_core/modules/` 静态阶段。构建脚本按合成后的配置准备所选插件的源码。
 
 ## 8. 项目结构说明
 
@@ -221,20 +192,12 @@ https://github.com/kenzok8/small-package.git
 - `wrt_core/modules/`：模块化脚本，包括仓库准备、网络重试、feeds/custom_feed、源码修正、LuCI 修正、服务修正、验证、Docker、CUPS 等静态职责模块。
 - `wrt_core/patches/`：补丁、默认设置、Wi-Fi 初始化、NSS 诊断、PBR 规则和其他构建时注入文件。
 
-## 9. OAF（应用过滤）功能使用说明
+## 9. 构建脚本回归检查
 
-使用 OAF（应用过滤）功能前，需先完成以下操作：
-
-1. 打开系统设置 → 启动项 → 定位到「appfilter」
-2. 将「appfilter」当前状态从已禁用更改为已启用
-3. 完成配置后，点击启动按钮激活服务
-
-## 10. 构建脚本回归检查
-
-使用 Python 3、Git、Make 和 Bash 4.3 以上版本运行离线检查：
+使用 Python 3、Git、Make 和 Bash 4.3 以上版本运行离线检查。
 
 ```bash
 python3 -m unittest discover -s tests -v
 ```
 
-macOS 的系统 Bash 版本较旧时，可通过 `WRT_TEST_BASH=/path/to/bash` 指定较新版本。检查覆盖百里预装开关和共享依赖、配置预览、本地 APK 源过滤、分支及标签的浅克隆复位和固定 feed 的保留逻辑；不代替完整固件编译或实机验证。
+macOS 可用 `WRT_TEST_BASH=/path/to/bash` 指定较新的 Bash。离线测试覆盖共享配置、AP8220 NSS、Honk 内核和软件源检查，以及源码浅克隆。用 `./build.sh aliyun_ap8220_libwrt debug` 检查实际源码的 `make defconfig` 结果。

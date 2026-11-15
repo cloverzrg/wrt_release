@@ -271,6 +271,9 @@ resolve_config_fragments() {
     local candidate_fragments=()
 
     parse_fragment_csv "$(read_ini_by_key "CONFIG_FRAGMENTS")" DEFAULT_CONFIG_FRAGMENTS
+    if [[ $(read_ini_by_key "DEFAULT_EBPF_PROXY_DEPS") != 0 ]]; then
+        DEFAULT_CONFIG_FRAGMENTS=(ebpf_proxy_deps "${DEFAULT_CONFIG_FRAGMENTS[@]}")
+    fi
     parse_fragment_csv "${ADD_CONFIG_FRAGMENTS:-}" ADD_CONFIG_FRAGMENT_LIST
     parse_fragment_csv "${REMOVE_CONFIG_FRAGMENTS:-}" REMOVE_CONFIG_FRAGMENT_LIST
 
@@ -308,8 +311,8 @@ print_config_fragment_summary() {
 print_config_preview() {
     print_config_fragment_summary
     echo "Config assembly order:"
-    echo "  1) $CONFIG_FILE"
-    echo "  2) $BASE_PATH/deconfig/compile_base.config"
+    echo "  1) $BASE_PATH/deconfig/compile_base.config"
+    echo "  2) $CONFIG_FILE"
 
     local order=3
     local fragment
@@ -400,17 +403,14 @@ if [[ $Build_Mod == "container_debug" ]]; then
     exit 0
 fi
 
-apply_config() {
+assemble_config() {
     local fragment
 
-    \cp -f "$CONFIG_FILE" "$BASE_PATH/../$BUILD_DIR/.config"
-
-    cat "$BASE_PATH/deconfig/compile_base.config" >> "$BASE_PATH/../$BUILD_DIR/.config"
+    cat "$BASE_PATH/deconfig/compile_base.config" "$CONFIG_FILE"
 
     for fragment in "${EFFECTIVE_CONFIG_FRAGMENTS[@]}"; do
-        cat "$CONFIG_FRAGMENT_DIR/$fragment.config" >> "$BASE_PATH/../$BUILD_DIR/.config"
+        cat "$CONFIG_FRAGMENT_DIR/$fragment.config"
     done
-
 }
 
 # 读取设备元信息，确定上游源码和构建目录。
@@ -437,34 +437,28 @@ export ENABLE_EBPF_PROXY_DEPS=0
 if fragment_in_list "ebpf_proxy_deps" "${EFFECTIVE_CONFIG_FRAGMENTS[@]}"; then
     export ENABLE_EBPF_PROXY_DEPS=1
 fi
-export ENABLE_BAILI_APPS=0
-if fragment_in_list "baili_apps" "${EFFECTIVE_CONFIG_FRAGMENTS[@]}"; then
-    export ENABLE_BAILI_APPS=1
-fi
+config_input=$(mktemp)
+trap 'rm -f "$config_input"' EXIT
+assemble_config > "$config_input"
+"$BASE_PATH/update.sh" "$REPO_URL" "$REPO_BRANCH" "$BUILD_DIR" "$COMMIT_HASH" "$config_input"
 
-"$BASE_PATH/update.sh" "$REPO_URL" "$REPO_BRANCH" "$BUILD_DIR" "$COMMIT_HASH"
-
-apply_config
+cp "$config_input" "$BASE_PATH/../$BUILD_DIR/.config"
 print_config_fragment_summary
 remove_uhttpd_dependency
 
 cd "$BASE_PATH/../$BUILD_DIR"
 make defconfig
 
+source "$BASE_PATH/modules/verify.sh"
+verify_shared_config "$(pwd)" "$config_input"
+verify_dockerman_sources "$(pwd)"
+if fragment_in_list "nss" "${EFFECTIVE_CONFIG_FRAGMENTS[@]}"; then
+    verify_nss_config "$(pwd)"
+fi
 if [[ $ENABLE_EBPF_PROXY_DEPS == 1 ]]; then
-    source "$BASE_PATH/modules/verify.sh"
     verify_ebpf_proxy_deps_config "$(pwd)" "$BASE_PATH/deconfig/fragments/ebpf_proxy_deps.config"
-fi
-if [[ $ENABLE_BAILI_APPS == 1 ]]; then
-    source "$BASE_PATH/modules/verify.sh"
-    verify_baili_apps_config "$(pwd)" "$BASE_PATH/deconfig/fragments/baili_apps.config"
-fi
-
-if grep -qE "^CONFIG_TARGET_x86_64=y" "$CONFIG_FILE"; then
-    DISTFEEDS_PATH="$BASE_PATH/../$BUILD_DIR/package/emortal/default-settings/files/99-distfeeds.conf"
-    if [ -d "${DISTFEEDS_PATH%/*}" ] && [ -f "$DISTFEEDS_PATH" ]; then
-        sed -i 's/aarch64_cortex-a53/x86_64/g' "$DISTFEEDS_PATH"
-    fi
+    source "$BASE_PATH/modules/ebpf_proxy_deps.sh"
+    configure_daeuniverse_apk_source "$(pwd)"
 fi
 
 if [[ $Build_Mod == "debug" ]]; then
@@ -482,8 +476,8 @@ make -j$(($(nproc) + 1)) || make -j1 V=s
 if [[ $ENABLE_EBPF_PROXY_DEPS == 1 ]]; then
     verify_ebpf_proxy_kernel "$(pwd)"
 fi
-if [[ $ENABLE_BAILI_APPS == 1 ]]; then
-    verify_baili_apk_repositories "$(pwd)"
+if grep -qxF 'CONFIG_USE_APK=y' .config; then
+    verify_apk_repositories "$(pwd)"
 fi
 
 FIRMWARE_DIR="$BASE_PATH/../firmware"

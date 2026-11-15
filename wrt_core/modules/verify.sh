@@ -1,13 +1,31 @@
 #!/usr/bin/env bash
 # 构建树一致性检查。
 
+read_kconfig_value() {
+    awk -v name="$2" '
+        index($0, name "=") == 1 { value=substr($0, length(name) + 2) }
+        $0 == "# " name " is not set" { value="n" }
+        END {
+            sub(/^"/, "", value)
+            sub(/"$/, "", value)
+            print value
+        }
+    ' "$1"
+}
+
 ebpf_proxy_kernel_patchver() {
     local build_dir="$1"
-    local target_mk="$build_dir/target/linux/mediatek/Makefile"
-    local subtarget_mk="$build_dir/target/linux/mediatek/filogic/target.mk"
+    local board subtarget
+    board=$(read_kconfig_value "$build_dir/.config" CONFIG_TARGET_BOARD)
+    subtarget=$(read_kconfig_value "$build_dir/.config" CONFIG_TARGET_SUBTARGET)
+    local target_mk="$build_dir/target/linux/$board/Makefile"
+    local subtarget_mk="$build_dir/target/linux/$board/$subtarget/target.mk"
     local files=("$target_mk")
 
-    [[ -f "$target_mk" ]] || return 1
+    if [[ -z "$board" || ! -f "$target_mk" ]]; then
+        echo "错误：无法读取目标平台 $board 的内核版本。" >&2
+        return 1
+    fi
     [[ ! -f "$subtarget_mk" ]] || files+=("$subtarget_mk")
 
     awk '
@@ -23,38 +41,10 @@ ebpf_proxy_kernel_patchver() {
 verify_ebpf_proxy_deps_config() {
     local build_dir="$1"
     local config_path="$build_dir/.config"
-    local required_settings=(
-        CONFIG_TARGET_mediatek_filogic CONFIG_aarch64 CONFIG_IPV6
-        CONFIG_KERNEL_CGROUPS CONFIG_KERNEL_CGROUP_BPF CONFIG_KERNEL_NET_NS
-        CONFIG_KERNEL_DEBUG_INFO CONFIG_KERNEL_DEBUG_INFO_BTF
-        CONFIG_KERNEL_KPROBES CONFIG_KERNEL_KPROBE_EVENTS CONFIG_KERNEL_BPF_EVENTS
-        CONFIG_KERNEL_BPF_STREAM_PARSER CONFIG_KERNEL_FTRACE
-        CONFIG_KERNEL_FUNCTION_TRACER CONFIG_KERNEL_DYNAMIC_FTRACE
-        CONFIG_PACKAGE_kmod-sched-core CONFIG_PACKAGE_kmod-sched-bpf
-        CONFIG_PACKAGE_kmod-veth CONFIG_PACKAGE_kmod-nft-core
-        CONFIG_PACKAGE_kmod-nft-queue CONFIG_PACKAGE_kmod-nfnetlink-queue
-        CONFIG_PACKAGE_kmod-nf-conntrack CONFIG_PACKAGE_ca-bundle
-        CONFIG_PACKAGE_libstdcpp CONFIG_PACKAGE_v2ray-geoip CONFIG_PACKAGE_v2ray-geosite
-        CONFIG_PACKAGE_vmlinux-btf-builtin CONFIG_PACKAGE_jshn
-        CONFIG_PACKAGE_flock CONFIG_PACKAGE_coreutils-timeout
-    )
-    local setting
-    local patchver
+    local patchver arch
 
-    for setting in "${required_settings[@]}"; do
-        if ! grep -qx "${setting}=y" "$config_path"; then
-            echo "错误：后续安装 dae/honk 所需 ${setting}=y 在 make defconfig 后缺失。" >&2
-            return 1
-        fi
-    done
+    verify_config_fragment "$build_dir" "$2" "Honk 运行依赖" || return 1
 
-    if grep -qx 'CONFIG_KERNEL_DEBUG_INFO_REDUCED=y' "$config_path"; then
-        echo "错误：dae/honk 的 BTF 支持不能与缩减调试信息同时启用。" >&2
-        return 1
-    fi
-
-    # The current ARM64 Filogic profile is verified against its normal kernel.
-    # Do not silently validate a different testing kernel's version instead.
     if grep -qx 'CONFIG_TESTING_KERNEL=y' "$config_path"; then
         echo "错误：dae/honk 配置尚未验证 testing kernel，请使用默认内核。" >&2
         return 1
@@ -70,21 +60,17 @@ verify_ebpf_proxy_deps_config() {
         return 1
     fi
 
-    verify_baili_apps_config "$build_dir" "$2" "eBPF 代理后续安装依赖" || return 1
-    if ! grep -qxF 'CONFIG_USE_APK=y' "$config_path"; then
-        echo "错误：daeuniverse 官方软件源要求 APK 包管理器。" >&2
-        return 1
-    fi
-    if ! grep -qxF 'CONFIG_TARGET_ARCH_PACKAGES="aarch64_cortex-a53"' "$config_path"; then
-        echo "错误：当前架构与已配置的 daeuniverse 应用源不匹配。" >&2
-        return 1
-    fi
+    arch=$(read_kconfig_value "$config_path" CONFIG_TARGET_ARCH_PACKAGES)
+    case "$arch" in
+        aarch64_cortex-a53|aarch64_generic|x86_64) ;;
+        *) echo "错误：daeuniverse 25.12 应用源未配置架构 $arch。" >&2; return 1 ;;
+    esac
     echo "dae/honk 后续安装依赖检查通过，目标内核 ${patchver}。"
 }
 
 verify_ebpf_proxy_kernel() {
     local build_dir="$1"
-    local patchver
+    local patchver board subtarget
     local suffix
     local config_path
     local setting
@@ -106,8 +92,10 @@ verify_ebpf_proxy_kernel() {
     ' "$build_dir/target/linux/generic/kernel-$patchver") || return 1
     [[ -n "$suffix" ]] || return 1
 
+    board=$(read_kconfig_value "$build_dir/.config" CONFIG_TARGET_BOARD)
+    subtarget=$(read_kconfig_value "$build_dir/.config" CONFIG_TARGET_SUBTARGET)
     config_path=$(find "$build_dir/build_dir" -type f \
-        -path "*/linux-mediatek_filogic/linux-$patchver$suffix/.config" -print -quit)
+        -path "*/linux-${board}${subtarget:+_${subtarget}}/linux-$patchver$suffix/.config" -print -quit)
     if [[ ! -f "$config_path" ]]; then
         echo "错误：未找到 dae/honk 的实际内核配置 linux-${patchver}${suffix}。" >&2
         return 1
@@ -129,10 +117,10 @@ verify_ebpf_proxy_kernel() {
     echo "dae/honk 实际内核配置检查通过。"
 }
 
-verify_baili_apps_config() {
+verify_config_fragment() {
     local config_path="$1/.config"
     local preset_path="$2"
-    local description=${3:-百里预装与后续安装依赖}
+    local description="$3"
     local line
     local setting
 
@@ -149,10 +137,10 @@ verify_baili_apps_config() {
                     return 1
                 fi
                 ;;
-            '# CONFIG_PACKAGE_'*' is not set'|'# CONFIG_FEED_'*' is not set')
+            '# CONFIG_'*' is not set')
                 setting=${line#\# }
                 setting=${setting% is not set}
-                if grep -qxE "${setting}=(y|m)" "$config_path"; then
+                if grep -qxF -e "${setting}=y" -e "${setting}=m" "$config_path"; then
                     echo "错误：${description}中禁止的配置仍被选中：${setting}。" >&2
                     return 1
                 fi
@@ -163,50 +151,58 @@ verify_baili_apps_config() {
     echo "${description}检查通过。"
 }
 
-verify_custom_feed_installed_paths() {
-    local custom_feed_name
-    local custom_feed_package_dir
-    # install_feeds 后必须存在的 custom_feed 包路径。
-    local required_package_dirs=(
-        luci-app-adguardhome luci-app-mosdns v2ray-geodata luci-app-easytier
-        luci-app-passwall nikki luci-app-nikki mihomo-meta luci-app-emmc-health
+verify_shared_config() {
+    local config_path="$1/.config"
+    local input_config="$2"
+    local required=(
+        CONFIG_PACKAGE_luci-app-package-manager CONFIG_PACKAGE_dnsmasq-full
+        CONFIG_PACKAGE_kmod-fs-exfat CONFIG_PACKAGE_kmod-fs-msdos CONFIG_PACKAGE_kmod-fs-ntfs3
+        CONFIG_PACKAGE_kmod-nls-cp932 CONFIG_PACKAGE_kmod-nls-cp936 CONFIG_PACKAGE_kmod-nls-cp950
     )
-    local missing_package_dirs=()
-
-    if [[ ${ENABLE_BAILI_APPS:-0} == 1 ]]; then
-        required_package_dirs=(
-            xray-core chinadns-ng dns2socks geoview ipt2socks tcping v2ray-geodata
-            luci-app-passwall
-        )
+    local setting expected actual
+    if [[ $(read_kconfig_value "$input_config" CONFIG_USE_APK) == y ]]; then
+        required+=(CONFIG_USE_APK CONFIG_PACKAGE_apk-openssl)
+    else
+        required+=(CONFIG_PACKAGE_opkg)
     fi
-
-    custom_feed_name=$(get_custom_feed_name)
-    custom_feed_package_dir=$(get_custom_feed_package_dir)
-
-    collect_missing_directories "$custom_feed_package_dir" required_package_dirs missing_package_dirs
-
-    if [ ${#missing_package_dirs[@]} -ne 0 ]; then
-        printf '错误：%s 安装后缺少以下仓库依赖路径：\n' "$custom_feed_name" >&2
-        printf '  - %s\n' "${missing_package_dirs[@]}" >&2
-        return 1
-    fi
+    for setting in "${required[@]}"; do
+        if ! grep -qxF "${setting}=y" "$config_path"; then
+            echo "错误：共享配置在 make defconfig 后缺失：${setting}=y。" >&2
+            return 1
+        fi
+    done
+    for setting in CONFIG_PACKAGE_luci-app-diskman CONFIG_PACKAGE_luci-i18n-diskman-zh-cn; do
+        expected=$(read_kconfig_value "$input_config" "$setting")
+        actual=$(read_kconfig_value "$config_path" "$setting")
+        if [[ $expected =~ ^[ym]$ && $actual != "$expected" ]]; then
+            echo "错误：Diskman 配置在 make defconfig 后缺失：$setting=$expected。" >&2
+            return 1
+        fi
+    done
 }
 
+verify_nss_config() {
+    local config_path="$1/.config"
+    local setting
+    for setting in CONFIG_ATH11K_NSS_SUPPORT CONFIG_PACKAGE_kmod-qca-nss-dp \
+                   CONFIG_PACKAGE_kmod-qca-nss-drv CONFIG_PACKAGE_kmod-qca-nss-ecm; do
+        if ! grep -qxF "${setting}=y" "$config_path"; then
+            echo "错误：NSS 配置在 make defconfig 后缺失：${setting}=y。" >&2
+            return 1
+        fi
+    done
+}
 
-verify_baili_luci_sources() {
-    [[ ${ENABLE_BAILI_APPS:-0} == 1 ]] || return 0
-
+verify_dockerman_sources() {
     local build_dir="$1"
+    local selected
+    selected=$(read_kconfig_value "$build_dir/.config" CONFIG_PACKAGE_luci-app-dockerman)
+    [[ $selected == y || $selected == m ]] || return 0
+
     local luci_dir="$build_dir/feeds/luci"
-    local argon_mk="$luci_dir/themes/luci-theme-argon/Makefile"
     local dockerman_dir="$luci_dir/applications/luci-app-dockerman"
     local dockerd_init="$build_dir/feeds/packages/utils/dockerd/files/dockerd.init"
 
-    if ! grep -qxF 'PKG_VERSION:=2.4.7' "$argon_mk" \
-        || ! grep -qxF 'PKG_RELEASE:=20260824' "$argon_mk"; then
-        echo "错误：百里 Argon 必须使用固定 LuCI feed 的 2.4.7-r20260824。" >&2
-        return 1
-    fi
     if ! grep -Fq "new form.Map('dockerd'," "$dockerman_dir/htdocs/luci-static/resources/view/dockerman/configuration.js" \
         || ! grep -Fq "ctx.get_first('dockerd', 'globals', 'hosts')" "$dockerman_dir/ucode/docker_socket.uc" \
         || ! grep -Fq "ctx.get('dockerd', 'globals', 'api_version')" "$dockerman_dir/root/usr/share/rpcd/ucode/docker_rpc.uc" \
@@ -214,27 +210,38 @@ verify_baili_luci_sources() {
         echo "错误：Dockerman 页面、RPC 后端和 dockerd 必须共用 /etc/config/dockerd。" >&2
         return 1
     fi
-    echo "百里 Argon、Dockerman 配置接口检查通过。"
+    echo "Dockerman 配置接口检查通过。"
 }
 
 
-verify_baili_apk_repositories() {
+verify_apk_repositories() {
     local build_dir="$1"
-    local repositories
+    local board arch repositories
     local found=0
+    board=$(read_kconfig_value "$build_dir/.config" CONFIG_TARGET_BOARD)
+    arch=$(read_kconfig_value "$build_dir/.config" CONFIG_TARGET_ARCH_PACKAGES)
 
     while IFS= read -r repositories; do
         found=1
-        if grep -q '/custom_feed/' "$repositories"; then
-            echo "错误：固件 APK 软件源仍包含不可发布的本地 custom_feed：$repositories" >&2
+        if grep -Eq '/(custom_feed|nss_packages|sqm_scripts_nss|openwrt_bandix|luci_app_bandix)/' "$repositories"; then
+            echo "错误：APK 软件源仍包含构建专用源：$repositories" >&2
             return 1
         fi
+        if [[ ${ENABLE_EBPF_PROXY_DEPS:-0} == 1 ]]; then
+            local daeuniverse_list="${repositories%/*}/daeuniverse.list"
+            local expected="@daeuniverse https://openwrt.daeuniverse.org/25.12/packages/$arch/packages.adb"
+            if [[ ! -f "$daeuniverse_list" || $(cat "$daeuniverse_list") != "$expected" ||
+                  ! -s "${repositories%/*}/../keys/daeuniverse.pem" ]]; then
+                echo "错误：固件缺少匹配架构的 daeuniverse 应用源或公钥。" >&2
+                return 1
+            fi
+        fi
     done < <(find "$build_dir/build_dir" -type f \
-        -path '*/root-mediatek/etc/apk/repositories.d/distfeeds.list' -print)
+        -path "*/root-$board*/etc/apk/repositories.d/distfeeds.list" -print)
 
     if [[ "$found" != 1 ]]; then
-        echo "错误：未找到百里固件根文件系统的 APK 软件源清单。" >&2
+        echo "错误：未找到固件根文件系统的 APK 软件源清单。" >&2
         return 1
     fi
-    echo "百里固件 APK 软件源检查通过。"
+    echo "固件 APK 软件源检查通过。"
 }

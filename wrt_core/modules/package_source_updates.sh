@@ -149,87 +149,6 @@ update_diskman() {
 }
 
 
-_sync_luci_lib_docker() {
-    local lib_path="$BUILD_DIR/feeds/luci/libs/luci-lib-docker"
-    local repo_url="https://github.com/lisaac/luci-lib-docker.git"
-
-    if [ ! -d "$lib_path" ]; then
-        echo "正在同步 luci-lib-docker..."
-        mkdir -p "$BUILD_DIR/feeds/luci/libs" || return
-        cd "$BUILD_DIR/feeds/luci/libs" || return
-
-        if ! git_retry clone --filter=blob:none --no-checkout "$repo_url" luci-lib-docker-tmp; then
-            echo "错误：从 $repo_url 克隆 luci-lib-docker 仓库失败" >&2
-            exit 1
-        fi
-        cd luci-lib-docker-tmp || return
-
-        git_retry sparse-checkout init --cone
-        git_retry sparse-checkout set collections/luci-lib-docker || return
-
-        git_retry checkout --quiet
-
-        mv collections/luci-lib-docker ../luci-lib-docker || return
-        cd .. || return
-        \rm -rf luci-lib-docker-tmp
-        cd "$BUILD_DIR"
-
-        if [ -f "$lib_path/Makefile" ]; then
-            sed -i 's/^PKG_VERSION:=v/PKG_VERSION:=/' "$lib_path/Makefile"
-        fi
-
-        echo "luci-lib-docker 同步完成"
-    fi
-}
-
-
-update_dockerman() {
-    # The pinned ImmortalWrt feed ships the JS/ucode frontend and backend together.
-    # Replacing only this app with the old Lua implementation changes its UCI API.
-    if [[ ${ENABLE_BAILI_APPS:-0} == 1 ]]; then
-        echo "百里保留固定 LuCI feed 中的 Dockerman 与配套 RPC 后端。"
-        return 0
-    fi
-
-    local path="$BUILD_DIR/feeds/luci/applications/luci-app-dockerman"
-    local repo_url="https://github.com/lisaac/luci-app-dockerman.git"
-
-    if [ -d "$path" ]; then
-        echo "正在更新 dockerman..."
-        _sync_luci_lib_docker || return
-
-        cd "$BUILD_DIR/feeds/luci/applications" || return
-        \rm -rf "luci-app-dockerman"
-
-        if ! git_retry clone --filter=blob:none --no-checkout "$repo_url" dockerman; then
-            echo "错误：从 $repo_url 克隆 dockerman 仓库失败" >&2
-            exit 1
-        fi
-        cd dockerman || return
-
-        git_retry sparse-checkout init --cone
-        git_retry sparse-checkout set applications/luci-app-dockerman || return
-
-        git_retry checkout --quiet
-
-        mv applications/luci-app-dockerman ../luci-app-dockerman || return
-        cd .. || return
-        \rm -rf dockerman
-        cd "$BUILD_DIR"
-
-        if [ -f "$path/Makefile" ]; then
-            sed -i 's/^PKG_VERSION:=v/PKG_VERSION:=/' "$path/Makefile"
-        fi
-
-        if declare -F docker_stack_sync_dockerman_nftables_compat >/dev/null 2>&1; then
-            docker_stack_sync_dockerman_nftables_compat "$BUILD_DIR" "0" || return 1
-        fi
-
-        echo "dockerman 更新完成"
-    fi
-}
-
-
 add_quickfile() {
     local repo_url="https://github.com/sbwml/luci-app-quickfile.git"
     local target_dir="$BUILD_DIR/package/emortal/quickfile"
@@ -251,33 +170,6 @@ add_quickfile() {
 \t\t\$(INSTALL_BIN) \$(PKG_BUILD_DIR)\/quickfile-aarch64_generic \$(1)\/usr\/bin\/quickfile; \\\
 \tfi' "$makefile_path"
     fi
-}
-
-
-update_argon() {
-    if [[ ${ENABLE_BAILI_APPS:-0} == 1 ]]; then
-        echo "百里保留固定 LuCI feed 中的 Argon 2.4.7-r20260824。"
-        return 0
-    fi
-
-    local repo_url="https://github.com/ZqinKing/luci-theme-argon.git"
-    local dst_theme_path="$BUILD_DIR/feeds/luci/themes/luci-theme-argon"
-    local tmp_dir
-    tmp_dir=$(mktemp -d)
-
-    echo "正在更新 argon 主题..."
-
-    if ! git_retry clone --depth 1 "$repo_url" "$tmp_dir"; then
-        echo "错误：从 $repo_url 克隆 argon 主题仓库失败" >&2
-        rm -rf "$tmp_dir"
-        exit 1
-    fi
-
-    rm -rf "$dst_theme_path"
-    rm -rf "$tmp_dir/.git"
-    mv "$tmp_dir" "$dst_theme_path"
-
-    echo "luci-theme-argon 更新完成"
 }
 
 
