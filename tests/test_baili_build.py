@@ -12,6 +12,11 @@ import unittest
 REPO = Path(__file__).resolve().parents[1]
 CORE = REPO / "wrt_core"
 BASH = os.environ.get("WRT_TEST_BASH", "bash")
+DISKMAN_PACKAGES = (
+    "luci-app-diskman", "luci-i18n-diskman-zh-cn", "kmod-fs-exfat",
+    "kmod-fs-msdos", "kmod-fs-ntfs3", "kmod-nls-cp932", "kmod-nls-cp936",
+    "kmod-nls-cp950",
+)
 
 
 def baili_config():
@@ -61,6 +66,7 @@ class BailiBuildTests(unittest.TestCase):
                     if line.startswith("CONFIG_") and line.endswith("=y")]
         required += ["CONFIG_PACKAGE_dnsmasq-full", "CONFIG_PACKAGE_kmod-tun",
                      "CONFIG_PACKAGE_luci-app-dockerman", "CONFIG_PACKAGE_luci-theme-argon"]
+        required += ["CONFIG_PACKAGE_" + package for package in DISKMAN_PACKAGES]
         for setting in required:
             self.assertEqual(config.get(setting), "y", setting)
         preview = subprocess.run([BASH, str(REPO / "build.sh"),
@@ -96,6 +102,18 @@ class BailiBuildTests(unittest.TestCase):
                             check=False)
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("luci-app-passwall", result.stderr)
+
+        config["CONFIG_PACKAGE_luci-app-passwall"] = "n"
+        for package in DISKMAN_PACKAGES:
+            with self.subTest(package=package):
+                setting = "CONFIG_PACKAGE_" + package
+                config[setting] = "m"
+                write_config()
+                result = self.shell("verify.sh", 'verify_baili_apps_config "$BUILD_DIR" ' + preset,
+                                    check=False)
+                self.assertNotEqual(result.returncode, 0)
+                self.assertIn(setting, result.stderr)
+                config[setting] = "y"
 
     def feeds_fixture(self):
         target = self.build / "include/feeds.mk"

@@ -85,7 +85,7 @@ GitHub Actions 仅提供京东云百里 AX6000（JDCloud RE-CP-03）的 `jdcloud
 
 百里配置最后应用 `baili_apps` 片段，覆盖共享预装项：
 
-- 预装 Docker / Dockerman、Argon 主题、网络唤醒和 UPnP。
+- 预装 Docker / Dockerman、Diskman 及其简体中文包、Argon 主题、网络唤醒和 UPnP。Diskman 所需的 exFAT、MS-DOS、NTFS3 和 CP932 / CP936 / CP950 内核模块随固件构建并预装。
 - 关闭 Passwall、中文包、Xray、ChinaDNS-NG、dns2socks、Geoview、ipt2socks、microsocks、tcping 和 SmartDNS 核心的预装开关。相关源码、可选配置片段和处理函数继续保留。
 - 不预装 Tailscale、OpenVPN 及其管理页面。预置 CA、TUN、OpenSSL、libcap-ng、LZO、LZ4、libnl-genl 和与固件内核匹配的 OpenVPN DCO 模块，供后续安装 OpenVPN OpenSSL 版本及 Tailscale 使用。
 - 取消 AdGuardHome、定时重启、Samba4、Vlmcsd、EasyTier、Lucky、MosDNS、OAF、PBR、独立 SmartDNS 管理页面、独立 ttyd 页面、iStoreX、QuickStart、CoreMark、htop、tcpdump、qrencode 和 SFTP 服务的预装。Dockerman 依赖的 ttyd 核心继续保留，独立网页终端服务默认关闭。
