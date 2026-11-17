@@ -82,7 +82,7 @@ GitHub Actions 的手动构建也提供 `add_fragments` 与 `remove_fragments` �
 
 固件保留 DNS、IPv6、防火墙、TUN 和 OpenVPN DCO 等依赖。AP8220 的 LiBwrt 配置与百里一样预装 Docker 和 Dockerman。其他设备可通过设备配置选择 Docker 和 `docker_deps`。
 
-百里固定使用 ImmortalWrt `v25.12.2`。AP8220 固定使用 LibWrt `v25.12.2`，目标为 `qualcommax/ipq807x`，内核为 Linux 6.12。两者使用同一版 ImmortalWrt LuCI 和 packages 源。软件包管理器保留固件内置的 `base-files` 版本约束。
+百里固定使用 ImmortalWrt `v25.12.2`。AP8220 跟随 LibWrt `25.12-nss` 分支，目标为 `qualcommax/ipq807x`。AP8220 的内核和软件包随该分支更新。软件包管理器保留固件内置的 `base-files` 版本约束。
 
 ### 安装 Honk
 

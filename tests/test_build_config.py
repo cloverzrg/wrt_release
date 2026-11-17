@@ -80,7 +80,7 @@ class BuildConfigTests(unittest.TestCase):
     def test_ap8220_uses_libwrt_and_nss(self):
         model = "aliyun_ap8220_libwrt"
         ini = (CORE / f"compilecfg/{model}.ini").read_text()
-        self.assertIn("REPO_BRANCH=v25.12.2", ini)
+        self.assertIn("REPO_BRANCH=25.12-nss\n", ini)
         _, config = build_config(model)
         self.assertEqual(config["CONFIG_TARGET_DEVICE_qualcommax_ipq807x_DEVICE_aliyun_ap8220"], "y")
         self.assertEqual(config["CONFIG_PACKAGE_luci-app-dockerman"], "y")
